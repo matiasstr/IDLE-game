@@ -15,4 +15,6 @@ export 'src/api/viz_types.dart'
         VizTransition,
         VizTransitionKind,
         productionEnergy;
+export 'src/loss/loss_chart.dart' show LossChart;
+export 'src/loss/loss_history.dart' show LossHistory, LossMarker;
 export 'src/widget/neural_network_view.dart' show NeuralNetworkView;
