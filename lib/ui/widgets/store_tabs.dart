@@ -25,11 +25,7 @@ class StoreTabs extends StatelessWidget {
               if (stats != null) Tab(text: l10n.stats, height: 48),
             ],
           ),
-          Expanded(
-            child: TabBarView(
-              children: [hardware, research, ?stats],
-            ),
-          ),
+          Expanded(child: TabBarView(children: [hardware, research, ?stats])),
         ],
       ),
     );

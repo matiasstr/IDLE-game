@@ -117,7 +117,10 @@ void main() {
     (tester) async {
       final prefs = await pumpApp(tester, const Size(360, 640));
       await tester.tap(find.byKey(const ValueKey('settings-button')));
+      // Start the sheet transition before advancing its animation clock.
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('ES').hitTestable(), findsOneWidget);
       await tester.tap(find.text('ES'));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Ajustes'), findsOneWidget);
