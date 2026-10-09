@@ -15,6 +15,7 @@ import 'package:neural_idle/ui/widgets/ai_speech_bubble.dart';
 import 'package:neural_idle/ui/widgets/generator_card.dart';
 import 'package:neural_idle/ui/widgets/language_toggle.dart';
 import 'package:neural_idle/ui/widgets/model_status_panel.dart';
+import 'package:neural_idle/ui/widgets/neon_panel.dart';
 import 'package:neural_idle/ui/widgets/offline_progress_dialog.dart';
 import 'package:neural_idle/ui/widgets/resource_tile.dart';
 import 'package:neural_idle/ui/widgets/settings_sheet.dart';
@@ -117,6 +118,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           loss: text.loss(engine.loss(game)),
           nextArchitecture: next == null ? null : text.of(next.name),
           progressToNext: engine.stageProgress(game),
+        ),
+        const SizedBox(height: 12),
+        NeonPanel(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: SizedBox(
+            height: 96,
+            child: LossChart(
+              history: ref.watch(lossHistoryProvider),
+              theme: _vizTheme,
+              valueLabel: l10n.loss.toLowerCase(),
+              semanticLabel: l10n.loss,
+            ),
+          ),
         ),
       ],
     );

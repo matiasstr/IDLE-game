@@ -4,7 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neural_idle/app/shared_preferences_provider.dart';
 import 'package:neural_idle/state/game_controller.dart';
 import 'package:neural_idle/state/game_loop.dart';
+
+import 'dart:convert';
+
 import 'package:neural_idle_core/neural_idle_core.dart';
+import 'package:neural_viz/neural_viz.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final now = DateTime.utc(2026, 10, 9, 12);
@@ -153,6 +157,68 @@ void main() {
     expect(state.papersPublished, 1);
     expect(prefs.getString(GameController.saveKey), isNotNull);
     expect(controller.publishPaper(), isFalse, reason: 'the new run is fresh');
+  });
+
+  test('the loss chart samples once per second and marks evolutions', () async {
+    final (container, prefs) = await createContainer(
+      preferences: {
+        // 290 run tokens and 10 tokens/s: MLP (300) arrives in the 1st second.
+        GameController.saveKey: saveOf(
+          const GameState(
+            runTokens: 290,
+            lifetimeTokens: 290,
+            generators: {'laptop': 20},
+          ),
+          now,
+        ),
+      },
+    );
+    final controller = container.read(gameControllerProvider.notifier);
+    final loss = container.read(lossHistoryProvider);
+    for (var i = 0; i < 30; i++) {
+      controller.tick(0.1);
+    }
+    expect(loss.length, 3);
+    expect(loss.markers.map((m) => m.label), ['MLP']);
+    expect(
+      loss.latest,
+      closeTo(
+        controller.engine.loss(container.read(gameControllerProvider).state),
+        0.05,
+      ),
+    );
+
+    controller.save();
+    final saved = LossHistory.fromJson(
+      jsonDecode(prefs.getString(GameController.lossKey)!)
+          as Map<String, Object?>,
+    );
+    expect(saved.length, 3);
+  });
+
+  test('publishing a paper starts a new loss chart', () async {
+    final (container, _) = await createContainer(
+      preferences: {
+        GameController.saveKey: saveOf(
+          const GameState(runTokens: 4e8, lifetimeTokens: 4e8),
+          now,
+        ),
+      },
+    );
+    final controller = container.read(gameControllerProvider.notifier);
+    final loss = container.read(lossHistoryProvider)
+      ..add(0.5)
+      ..add(0.4);
+    expect(loss.length, 2);
+    controller.publishPaper();
+    expect(loss.length, 0);
+  });
+
+  test('a corrupt saved chart starts fresh', () async {
+    final (container, _) = await createContainer(
+      preferences: {GameController.lossKey: '{"points": "nope"'},
+    );
+    expect(container.read(lossHistoryProvider).length, 0);
   });
 
   testWidgets('the game loop advances the engine while on screen', (
