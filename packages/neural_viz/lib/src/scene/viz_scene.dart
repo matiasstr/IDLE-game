@@ -45,6 +45,9 @@ class VizScene {
   static const _maxHops = 9;
   static const _memory = 0.35;
 
+  /// Marks a cached route that ends in a neuron with no outgoing edges.
+  static const _deadRoute = -2;
+
   final FrameBuffers frame = FrameBuffers();
   final EnergyTrack energy = EnergyTrack();
   final TapTracker taps = TapTracker();
@@ -825,7 +828,9 @@ class VizScene {
       _ringRoute(layout, offset, k, cyc, t, s, m, speed);
       return offset;
     }
-    if (_pathCycle[k] == cyc) return offset;
+    if (_pathCycle[k] == cyc) {
+      return _pathNodes[offset] == _deadRoute ? -1 : offset;
+    }
     _pathCycle[k] = cyc;
     final seed = layout.topology.seed;
     final cycle = cyc.toInt();
@@ -835,7 +840,12 @@ class VizScene {
     for (var hop = 1; hop < layout.layerCount; hop++) {
       node = _weightedNext(layout, node, hash01(seed, k, cycle, hop));
       _pathNodes[offset + hop] = node;
-      if (node < 0) return -1;
+      if (node < 0) {
+        // Pruned layouts can strand a route; remember it for the whole
+        // cycle so every evaluation of this cycle skips the slot alike.
+        _pathNodes[offset] = _deadRoute;
+        return -1;
+      }
     }
     return offset;
   }
@@ -1217,8 +1227,9 @@ class VizScene {
     final fadeIn = tr.style == TransitionStyle.crossfade
         ? clamp01(el / tr.duration)
         : clamp01((el - settle) / (tr.duration - settle));
-    // The static picture fades in over the dynamic drawing (columns only).
-    frame.networkPictureAlpha = layout.isRings ? 0 : fadeIn;
+    // The static picture fades in over the dynamic drawing. For rings it
+    // holds only the guides and motif statics, so it can fade in too.
+    frame.networkPictureAlpha = fadeIn;
     if (tr.style == TransitionStyle.crossfade) {
       frame.previousPictureAlpha = 1 - fadeIn;
       for (var i = 0; i < layout.neuronCount; i++) {

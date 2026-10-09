@@ -102,6 +102,23 @@ void main() {
       });
     }
 
+    test('also on compact layouts that prune edges', () {
+      // Below 480 px dense stages keep their top-4 incoming edges, which can
+      // leave a route stranded; a stranded route must stay skipped.
+      for (final stage in const [4, 5, 6]) {
+        final d = SceneDriver(
+          stage,
+          size: const Size(390, 280),
+          production: 1e8,
+        );
+        for (var t = 0.0; t < 12; t += 0.37) {
+          final first = snapshot(d.frameAt(t));
+          expect(snapshot(d.frameAt(t)), first, reason: 'stage $stage at $t');
+        }
+        d.dispose();
+      }
+    });
+
     test('also while transforming', () {
       for (var stage = 0; stage < 7; stage++) {
         final d = SceneDriver(stage, production: 1e9)..frameAt(0.9);
