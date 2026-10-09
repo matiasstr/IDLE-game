@@ -31,9 +31,10 @@ void _expectWithinCaps(FrameBuffers f, String reason) {
 
 /// Signal heads in the glow batch: cyan dots of the head size (motifs may
 /// add dots of their own, at other sizes).
+/// Signal heads of any hue: motifs may tint them (multimodal inputs keep
+/// their modality's color until fusion).
 int _signalHeads(VizScene scene) {
   final glow = scene.frame.glow;
-  final signal = scene.theme.signal.toARGB32() & 0xffffff;
   final headWidth = 0.8 * scene.layout!.r + 2.5;
   var n = 0;
   for (var i = 0; i < glow.count; i++) {
@@ -41,7 +42,6 @@ int _signalHeads(VizScene scene) {
     final width = glow.transforms[i * 4] * Sprites.dot.width * glow.atlasScale;
     if (glow.rects[i * 4] == Sprites.dot.x * glow.atlasScale &&
         glow.rects[i * 4 + 1] == Sprites.dot.y * glow.atlasScale &&
-        glow.colors[i] & 0xffffff == signal &&
         (width - headWidth).abs() < 1e-3) {
       n++;
     }
