@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Flutter app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve app dependencies
+        run: flutter pub get
+      - name: Resolve nested packages for repository-wide analysis
+        run: |
+          (cd packages/neural_idle_core && dart pub get)
+          (cd packages/neural_viz && flutter pub get)
+          (cd packages/neural_viz/example && flutter pub get)
+      - name: Check app formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Analyze app
+        run: flutter analyze
+      - name: Test app
+        run: flutter test
+
+  core:
+    name: Dart game engine
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/neural_idle_core
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Flutter stable and Dart
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve engine dependencies
+        run: dart pub get
+      - name: Analyze engine
+        run: dart analyze
+      - name: Test engine
+        run: dart test
+
+  visualization:
+    name: Flutter visualization
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/neural_viz
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Flutter stable
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve visualization dependencies
+        run: flutter pub get
+      - name: Resolve visualization example dependencies
+        working-directory: packages/neural_viz/example
+        run: flutter pub get
+      - name: Analyze visualization
+        run: flutter analyze
+      - name: Test visualization
+        run: flutter test
