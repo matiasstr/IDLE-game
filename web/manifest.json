@@ -1,0 +1,12 @@
+{
+  "name": "Neural Idle",
+  "short_name": "Neural Idle",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#07090D",
+  "theme_color": "#07090D",
+  "description": "Train your own AI. A neural-network idle game.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [{"src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}
