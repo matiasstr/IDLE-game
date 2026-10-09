@@ -1,0 +1,19 @@
+name: neural_viz
+description: >-
+  Animated neural network and training-loss visualizations for Neural Idle,
+  drawn with CustomPainter. No dependencies beyond Flutter.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
