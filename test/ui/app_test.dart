@@ -5,9 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:neural_idle/app/app.dart';
 import 'package:neural_idle/app/locale_controller.dart';
 import 'package:neural_idle/app/shared_preferences_provider.dart';
+import 'package:neural_idle/state/game_controller.dart';
 import 'package:neural_idle/ui/layout/narrow_layout.dart';
 import 'package:neural_idle/ui/layout/wide_layout.dart';
 import 'package:neural_idle/ui/widgets/offline_progress_dialog.dart';
+import 'package:neural_idle_core/neural_idle_core.dart';
+import 'package:neural_viz/neural_viz.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Future<SharedPreferences> pumpApp(
@@ -52,7 +55,7 @@ void main() {
     ]) {
       expect(find.byKey(ValueKey(column)), findsOneWidget);
     }
-    expect(find.text('NEURAL NET VIZ'), findsOneWidget);
+    expect(find.byType(NeuralNetworkView), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -155,7 +158,16 @@ void main() {
   });
 
   testWidgets('debug offline dialog opens and collects', (tester) async {
-    await pumpApp(tester, const Size(390, 844));
+    // A game with hardware, so time away earns something to report.
+    final save = const SaveCodec().encode(
+      const GameState(generators: {'laptop': 10}),
+      savedAt: DateTime.now(),
+    );
+    await pumpApp(
+      tester,
+      const Size(390, 844),
+      preferences: {GameController.saveKey: save},
+    );
     await tester.tap(find.byKey(const ValueKey('debug-offline')));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(OfflineProgressDialog), findsOneWidget);

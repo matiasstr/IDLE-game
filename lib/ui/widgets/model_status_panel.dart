@@ -39,24 +39,30 @@ class ModelStatusPanel extends StatelessWidget {
                 ?.copyWith(color: AppColors.textSecondary),
           ),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
+              // Long names ("Transformer", "Multimodal") shrink to one line.
               Expanded(
-                child: Text(
-                  architecture,
-                  style: AppTextStyles.number(
-                    size: 28,
-                    color: AppColors.neonViolet,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    architecture,
+                    maxLines: 1,
+                    style: AppTextStyles.number(
+                      size: 28,
+                      color: AppColors.neonViolet,
+                    ),
                   ),
                 ),
               ),
-              Flexible(
-                child: Text(
-                  l10n.stageLabel(stage, totalStages),
-                  textAlign: TextAlign.end,
-                  style: AppTextStyles.number(
-                    size: 11,
-                    color: AppColors.textSecondary,
-                  ),
+              const SizedBox(width: 8),
+              Text(
+                l10n.stageLabel(stage, totalStages),
+                style: AppTextStyles.number(
+                  size: 11,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],

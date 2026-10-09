@@ -1,69 +1,89 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neural_idle/l10n/app_localizations.dart';
+import 'package:neural_idle/state/game_controller.dart';
+import 'package:neural_idle/state/game_loop.dart';
 import 'package:neural_idle/theme/app_colors.dart';
 import 'package:neural_idle/theme/app_spacing.dart';
 import 'package:neural_idle/theme/app_text_styles.dart';
+import 'package:neural_idle/ui/game_icons.dart';
+import 'package:neural_idle/ui/game_text.dart';
 import 'package:neural_idle/ui/layout/narrow_layout.dart';
 import 'package:neural_idle/ui/layout/wide_layout.dart';
-import 'package:neural_idle/ui/mock/mock_game_data.dart';
 import 'package:neural_idle/ui/widgets/ai_speech_bubble.dart';
 import 'package:neural_idle/ui/widgets/generator_card.dart';
 import 'package:neural_idle/ui/widgets/language_toggle.dart';
 import 'package:neural_idle/ui/widgets/model_status_panel.dart';
-import 'package:neural_idle/ui/widgets/neural_viz_placeholder.dart';
 import 'package:neural_idle/ui/widgets/offline_progress_dialog.dart';
 import 'package:neural_idle/ui/widgets/resource_tile.dart';
 import 'package:neural_idle/ui/widgets/settings_sheet.dart';
 import 'package:neural_idle/ui/widgets/store_tabs.dart';
 import 'package:neural_idle/ui/widgets/train_button.dart';
 import 'package:neural_idle/ui/widgets/upgrade_card.dart';
+import 'package:neural_idle_core/neural_idle_core.dart';
+import 'package:neural_viz/neural_viz.dart';
 
-/// The sole mock-data reader and future integration point for game providers.
-class HomeScreen extends StatelessWidget {
+/// The game screen: maps the engine state to the presentational widgets.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _offlineVisible = false;
+
+  /// The network view's captions use the app's mono font.
+  static final _vizTheme = NeuralVizTheme(
+    monoFontFamily: AppTextStyles.number().fontFamily ?? 'JetBrains Mono',
+  );
+
+  GameController get _controller => ref.read(gameControllerProvider.notifier);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showOffline());
+  }
+
+  /// Tells the player what their AI did while they were away (once).
+  Future<void> _showOffline() async {
+    final offline = ref.read(gameControllerProvider).offline;
+    if (offline == null || _offlineVisible || !mounted) return;
+    _offlineVisible = true;
+    final text = GameText.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (_) => OfflineProgressDialog(
+        duration: text.duration(offline.credited),
+        tokensGained: text.amount(offline.tokensEarned),
+      ),
+    );
+    _offlineVisible = false;
+    if (mounted) _controller.dismissOffline();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen(gameControllerProvider.select((s) => s.offline), (_, next) {
+      if (next != null) _showOffline();
+    });
+    final game = ref.watch(gameControllerProvider).state;
+    final engine = ref.watch(gameEngineProvider);
     final l10n = AppLocalizations.of(context);
-    final spanish = Localizations.localeOf(context).languageCode == 'es';
-    final hardware = ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
-      itemCount: MockGameData.hardware.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final item = MockGameData.hardware[index];
-        return GeneratorCard(
-          key: ValueKey('hardware-$index'),
-          icon: item.icon,
-          name: item.name,
-          description: spanish ? item.descriptionEs : item.descriptionEn,
-          owned: item.owned,
-          cost: item.cost,
-          production: item.production,
-          canAfford: item.canAfford,
-          locked: item.locked,
-          onBuy: () {},
-        );
-      },
-    );
-    final research = ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
-      itemCount: MockGameData.research.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final item = MockGameData.research[index];
-        return UpgradeCard(
-          name: item.name,
-          description: spanish ? item.descriptionEs : item.descriptionEn,
-          effect: item.effect,
-          cost: item.cost,
-          canAfford: item.canAfford,
-          purchased: item.purchased,
-          onBuy: () {},
-        );
-      },
-    );
+    final text = GameText.of(context);
+
+    final architecture = engine.architecture(game);
+    final next = engine.nextArchitecture(game);
+    final stage = engine.stageIndex(game);
+    final production = engine.productionPerSecond(game);
+    final accuracy = engine.accuracy(game);
+
+    final hardware = _hardwareList(engine, game, text);
+    final research = _researchList(engine, game, text);
+
     Widget resources() => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -72,184 +92,277 @@ class HomeScreen extends StatelessWidget {
         ResourceTile(
           icon: Icons.token_outlined,
           label: l10n.tokens,
-          value: MockGameData.tokens,
+          value: text.amount(game.tokens),
           accent: AppColors.neonCyan,
         ),
         const SizedBox(height: 12),
         ResourceTile(
           icon: Icons.bolt_rounded,
           label: l10n.tokensPerSecond,
-          value: MockGameData.production,
+          value: text.rate(production),
         ),
         const SizedBox(height: 12),
         ResourceTile(
           icon: Icons.track_changes_rounded,
           label: l10n.accuracy,
-          value: MockGameData.accuracyLabel,
+          value: text.percent(accuracy),
           accent: AppColors.neonViolet,
         ),
         const SizedBox(height: 24),
-        const ModelStatusPanel(
-          architecture: MockGameData.architecture,
-          stage: MockGameData.stage,
-          totalStages: MockGameData.totalStages,
-          accuracy: MockGameData.accuracy,
-          loss: MockGameData.loss,
-          nextArchitecture: MockGameData.nextArchitecture,
-          progressToNext: MockGameData.progressToNext,
+        ModelStatusPanel(
+          architecture: text.of(architecture.name),
+          stage: stage + 1,
+          totalStages: engine.content.architectures.length,
+          accuracy: accuracy,
+          loss: text.loss(engine.loss(game)),
+          nextArchitecture: next == null ? null : text.of(next.name),
+          progressToNext: engine.stageProgress(game),
         ),
       ],
     );
+
+    final visualization = ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: NeuralNetworkView(
+        topology: NetworkTopology.fromId(architecture.id, architecture.layers),
+        nextTopology: next == null
+            ? null
+            : NetworkTopology.fromId(next.id, next.layers),
+        stage: stage,
+        productionPerSecond: production,
+        trainingCount: game.manualTrainings,
+        progress: engine.stageProgress(game),
+        accuracy: accuracy,
+        onTrain: _controller.train,
+        theme: _vizTheme,
+        semanticLabel: '${l10n.architecture}: ${text.of(architecture.name)}',
+      ),
+    );
+
+    // The AI says something new every few seconds of play.
+    final speech = AiSpeechBubble(
+      text: text.of(engine.phrase(game, (game.playSeconds / 9).floor())),
+    );
+
     Widget trainButton() => TrainButton(
       label: l10n.train,
-      gainLabel: MockGameData.trainingGain,
-      onTap: () {},
+      gainLabel: text.gain(engine.tapValue(game)),
+      onTap: _controller.train,
     );
-    return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide = constraints.maxWidth >= AppSpacing.wideBreakpoint;
-            final topBar = SizedBox(
-              height: 56,
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.hub_outlined,
-                    color: AppColors.neonCyan,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.appTitle,
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        if (wide)
-                          Text(l10n.trainingLab, style: AppTextStyles.eyebrow),
-                      ],
-                    ),
-                  ),
-                  if (wide) ...[
-                    const LanguageToggle(),
-                    const SizedBox(width: 12),
-                  ],
-                  if (kDebugMode)
-                    IconButton(
-                      key: const ValueKey('debug-offline'),
-                      tooltip: l10n.debugOffline,
-                      onPressed: () => showDialog<void>(
-                        context: context,
-                        builder: (_) => const OfflineProgressDialog(
-                          duration: MockGameData.offlineDuration,
-                          tokensGained: MockGameData.offlineTokens,
-                        ),
-                      ),
-                      icon: const Icon(
-                        Icons.bug_report_outlined,
-                        color: AppColors.textSecondary,
-                        size: 20,
-                      ),
-                    ),
-                  IconButton(
-                    key: const ValueKey('settings-button'),
-                    tooltip: l10n.settings,
-                    onPressed: () => showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      builder: (_) => const SettingsSheet(),
-                    ),
-                    icon: const Icon(
-                      Icons.tune_rounded,
-                      color: AppColors.textSecondary,
-                      size: 20,
-                    ),
-                  ),
-                ],
-              ),
-            );
-            if (wide) {
-              return WideLayout(
-                topBar: topBar,
-                resources: resources(),
-                training: LayoutBuilder(
-                  builder: (context, trainingConstraints) {
-                    final content = Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Expanded(child: NeuralVizPlaceholder()),
-                        const SizedBox(height: 16),
-                        const AiSpeechBubble(text: MockGameData.speech),
-                        trainButton(),
-                        const SizedBox(height: 12),
-                        Text(
-                          l10n.trainingHint,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    );
-                    return trainingConstraints.maxHeight < 440
-                        ? SingleChildScrollView(
-                            child: SizedBox(height: 520, child: content),
-                          )
-                        : content;
-                  },
-                ),
-                store: StoreTabs(hardware: hardware, research: research),
+
+    return GameLoop(
+      child: Scaffold(
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= AppSpacing.wideBreakpoint;
+              final topBar = _TopBar(
+                wide: wide,
+                onDebugAway: () =>
+                    _controller.resumeAfter(const Duration(hours: 2)),
               );
-            }
-            return NarrowLayout(
-              topBar: topBar,
-              resources: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _CompactMetric(
-                        label: l10n.tokens,
-                        value: MockGameData.tokens,
-                        color: AppColors.neonCyan,
+              if (wide) {
+                return WideLayout(
+                  topBar: topBar,
+                  resources: resources(),
+                  training: LayoutBuilder(
+                    builder: (context, trainingConstraints) {
+                      final content = Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: visualization),
+                          const SizedBox(height: 16),
+                          speech,
+                          trainButton(),
+                          const SizedBox(height: 12),
+                          Text(
+                            l10n.trainingHint,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      );
+                      return trainingConstraints.maxHeight < 440
+                          ? SingleChildScrollView(
+                              child: SizedBox(height: 520, child: content),
+                            )
+                          : content;
+                    },
+                  ),
+                  store: StoreTabs(hardware: hardware, research: research),
+                );
+              }
+              return NarrowLayout(
+                topBar: topBar,
+                resources: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _CompactMetric(
+                          label: l10n.tokens,
+                          value: text.amount(game.tokens),
+                          color: AppColors.neonCyan,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: _CompactMetric(
-                        label: l10n.tokensPerSecond,
-                        value: MockGameData.production,
-                        color: AppColors.textPrimary,
+                      Expanded(
+                        child: _CompactMetric(
+                          label: l10n.tokensPerSecond,
+                          value: text.rate(production),
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: _CompactMetric(
-                        label: l10n.accuracy,
-                        value: MockGameData.accuracyLabel,
-                        color: AppColors.neonViolet,
+                      Expanded(
+                        child: _CompactMetric(
+                          label: l10n.accuracy,
+                          value: text.percent(accuracy),
+                          color: AppColors.neonViolet,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              visualization: const NeuralVizPlaceholder(),
-              speech: const AiSpeechBubble(text: MockGameData.speech),
-              trainButton: trainButton(),
-              store: StoreTabs(
-                hardware: hardware,
-                research: research,
-                stats: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: resources(),
+                visualization: visualization,
+                speech: speech,
+                trainButton: trainButton(),
+                store: StoreTabs(
+                  hardware: hardware,
+                  research: research,
+                  stats: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: resources(),
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
+      ),
+    );
+  }
+
+  /// Unlocked hardware, plus a mystery card for the next tier.
+  Widget _hardwareList(GameEngine engine, GameState game, GameText text) {
+    final generators = [
+      for (final generator in engine.content.generators)
+        if (engine.generatorVisibility(game, generator.id) !=
+            GeneratorVisibility.hidden)
+          generator,
+    ];
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+      itemCount: generators.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final generator = generators[index];
+        final locked =
+            engine.generatorVisibility(game, generator.id) ==
+            GeneratorVisibility.teased;
+        final cost = engine.generatorCost(game, generator.id);
+        return GeneratorCard(
+          key: ValueKey('hardware-${generator.id}'),
+          icon: generatorIcon(generator.id),
+          name: text.of(generator.name),
+          description: text.of(generator.description),
+          owned: game.owned(generator.id),
+          cost: text.amount(cost),
+          production: text.rate(engine.unitProduction(game, generator.id)),
+          canAfford: !locked && game.tokens >= cost,
+          locked: locked,
+          onBuy: locked ? null : () => _controller.buyGenerator(generator.id),
+        );
+      },
+    );
+  }
+
+  /// Research available now (cheapest first), then what's already bought.
+  Widget _researchList(GameEngine engine, GameState game, GameText text) {
+    final available = engine.availableUpgrades(game);
+    final purchased = [
+      for (final upgrade in engine.content.upgrades)
+        if (game.hasUpgrade(upgrade.id)) upgrade,
+    ];
+    final upgrades = [...available, ...purchased];
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+      itemCount: upgrades.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final upgrade = upgrades[index];
+        final bought = game.hasUpgrade(upgrade.id);
+        return UpgradeCard(
+          key: ValueKey('research-${upgrade.id}'),
+          name: text.of(upgrade.name),
+          description: text.of(upgrade.description),
+          effect: text.of(engine.effectLabel(upgrade)),
+          cost: text.amount(upgrade.cost),
+          canAfford: !bought && game.tokens >= upgrade.cost,
+          purchased: bought,
+          onBuy: bought ? null : () => _controller.buyUpgrade(upgrade.id),
+        );
+      },
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.wide, required this.onDebugAway});
+
+  final bool wide;
+  final VoidCallback onDebugAway;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox(
+      height: 56,
+      child: Row(
+        children: [
+          const Icon(Icons.hub_outlined, color: AppColors.neonCyan, size: 24),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.appTitle,
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                if (wide) Text(l10n.trainingLab, style: AppTextStyles.eyebrow),
+              ],
+            ),
+          ),
+          if (wide) ...[const LanguageToggle(), const SizedBox(width: 12)],
+          if (kDebugMode)
+            IconButton(
+              key: const ValueKey('debug-offline'),
+              tooltip: l10n.debugOffline,
+              onPressed: onDebugAway,
+              icon: const Icon(
+                Icons.bug_report_outlined,
+                color: AppColors.textSecondary,
+                size: 20,
+              ),
+            ),
+          IconButton(
+            key: const ValueKey('settings-button'),
+            tooltip: l10n.settings,
+            onPressed: () => showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              useSafeArea: true,
+              builder: (_) => const SettingsSheet(),
+            ),
+            icon: const Icon(
+              Icons.tune_rounded,
+              color: AppColors.textSecondary,
+              size: 20,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -261,9 +374,11 @@ class _CompactMetric extends StatelessWidget {
     required this.value,
     required this.color,
   });
+
   final String label;
   final String value;
   final Color color;
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
