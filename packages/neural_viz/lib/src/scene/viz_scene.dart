@@ -144,12 +144,14 @@ class VizScene {
   /// Whether the static layer should draw the network picture.
   bool get staticNetworkVisible => _transition == null && _layout != null;
 
-  /// Whether frames are needed even with reduced motion (a fade is running).
+  /// Whether frames are needed even with reduced motion: a transition or a
+  /// tap fade is running. After a tap, time keeps moving until the next tap
+  /// could start a wave, so a ticker stopped in between never stamps the
+  /// following taps inside the rate limit (which would swallow them).
   bool isAnimatingAt(double t) =>
-      _transition != null || t - _lastTapFadeStart < _reducedTapFade;
+      _transition != null || t - taps.lastWaveStart < TapTracker.minWaveGap;
 
   static const _reducedTapFade = 0.15;
-  double _lastTapFadeStart = double.negativeInfinity;
 
   // ================================================================ inputs
 
@@ -167,6 +169,7 @@ class VizScene {
     if (topology != _topology) {
       _startTransition(t, topology, stage);
     }
+    final stageChanged = stage != _stage;
     _stage = stage;
     if (nextTopology != _next) {
       _next = nextTopology;
@@ -184,14 +187,28 @@ class VizScene {
       energy.setTarget(t, quantized);
     }
 
-    final before = taps.serial;
-    taps.update(t, trainingCount);
-    if (taps.serial != before && reducedMotion) {
-      if (t - _lastTapFadeStart >= 0.5) _lastTapFadeStart = t;
-    }
+    // Taps while the network transforms (including the one that triggered
+    // the change) only heat it: the transition fires its own first wave.
+    final transition = _transition;
+    taps.update(
+      t,
+      trainingCount,
+      heatOnly: transition != null && !transition.isDone(t),
+    );
 
     _accuracy = accuracy.isNaN ? 0.1 : accuracy.clamp(0.0, 1.0);
     _progress = progress.isNaN ? 0 : progress.clamp(0.0, 1.0);
+
+    // The static layer only repaints when told: a new contrast bucket (the
+    // network picture is re-recorded) or stage (the background haze) must
+    // reach it now, not at the next resize. Paint can't notify, so do it
+    // here, while the widget updates.
+    if (_layout != null &&
+        (stageChanged ||
+            EdgeStyle.contrast(_accuracy, _progress, _next == null) !=
+                _contrast)) {
+      staticChanges.fire();
+    }
   }
 
   /// Marks theme / quality / caption / background settings as changed.
@@ -234,9 +251,10 @@ class VizScene {
     if (_previousNetwork == null) _retire(_network);
     _network = null;
     _transition = transition;
+    // The reborn network fires its first wave as it settles.
     _autoWaveAt = switch (transition.style) {
-      TransitionStyle.mitosis => t + 1.95,
-      TransitionStyle.collapse => t + 1.15,
+      TransitionStyle.mitosis ||
+      TransitionStyle.collapse => t + transition.settleAt,
       _ => double.negativeInfinity,
     };
     _adoptLayout(to);
@@ -279,13 +297,6 @@ class VizScene {
       _size = size;
       _dpr = dpr;
       _settingsDirty = true;
-      if (_layout != null) {
-        // A resize mid-transition simply lands on the new layout.
-        _layout = null;
-        _transition = null;
-        _retire(_previousNetwork);
-        _previousNetwork = null;
-      }
     }
     if (_atlas == null || _atlas!.scale != math.min(math.max(dpr, 1.0), 2.0)) {
       _atlas?.release();
@@ -299,7 +310,7 @@ class VizScene {
           : (size.width >= 560 ? VizQuality.high : VizQuality.medium);
       _retire(_background);
       _background = null;
-      if (_layout != null) _adoptLayout(_buildLayout(_topology));
+      if (_layout != null) _relayout();
     }
     if (_layout == null) {
       _adoptLayout(_buildLayout(_topology));
@@ -363,6 +374,54 @@ class VizScene {
       devicePixelRatio: _dpr,
       showCaptions: showCaptions,
     );
+  }
+
+  /// Rebuilds the layout for a new size or new settings. A transition in
+  /// flight carries on at the same progress (and still fires its callbacks)
+  /// on layouts rebuilt the same way; the old network restarts from its
+  /// rest positions, and a crossfade's outgoing picture, recorded at the
+  /// old size, is dropped.
+  void _relayout() {
+    _adoptLayout(_buildLayout(_topology));
+    final tr = _transition;
+    if (tr == null) return;
+    _retire(_previousNetwork);
+    _previousNetwork = null;
+    final old = tr.from;
+    final from = old == null ? null : _buildLayout(old.topology);
+    Float32List? fromX, fromY, fromR;
+    if (from != null) {
+      final n = from.neuronCount;
+      fromX = Float32List.fromList(from.x);
+      fromY = Float32List.fromList(from.y);
+      fromR = Float32List.fromList(from.radius);
+      if (from.isRings) {
+        // Rings had turned by the time the transition started.
+        final c = from.center;
+        for (var i = 0; i < n; i++) {
+          final k = from.layerOf[i];
+          final angle =
+              from.ringAngle[i] + NetworkLayout.ringOmega(k) * tr.start;
+          final s = math.sin(angle);
+          fromX[i] = c.dx + from.ringRadius[k] * math.cos(angle);
+          fromY[i] = c.dy + from.ringRadius[k] * kRingSquash * s;
+          fromR[i] = from.radius[i] * (s < 0 ? 0.85 : 1);
+        }
+      }
+    }
+    _transition =
+        SceneTransition(
+            info: tr.info,
+            start: tr.start,
+            to: _layout!,
+            from: from,
+            fromX: fromX,
+            fromY: fromY,
+            fromR: fromR,
+            reducedMotion: tr.reducedMotion,
+          )
+          ..peakFired = tr.peakFired
+          ..endFired = tr.endFired;
   }
 
   void _adoptLayout(NetworkLayout layout) {
@@ -435,21 +494,27 @@ class VizScene {
     frame.cores.atlasScale = _atlas!.scale;
 
     final n = layout.neuronCount;
-    final e = energy.energy(t);
-    final heat = taps.heat(t);
-    final afterglow = t - _afterglowAt < 6
-        ? 0.15 * math.exp(-(t - _afterglowAt) / 2)
+    // With reduced motion the network holds the still of its kind's hero
+    // time, at the current production: only fades (tap feedback,
+    // crossfades) follow t. [tm] is the time everything else moves by.
+    final still = reducedMotion;
+    final tm = still ? layout.kind.heroTime.inMicroseconds / 1e6 : t;
+    final e = still ? energy.target : energy.energy(t);
+    final heat = still ? 0.0 : taps.heat(t);
+    final sinceEvolve = t - _afterglowAt;
+    final afterglow = !still && sinceEvolve >= 0 && sinceEvolve < 6
+        ? 0.15 * math.exp(-sinceEvolve / 2)
         : 0.0;
 
-    _restPositions(layout, t);
+    _restPositions(layout, tm);
 
     final ctx = _ctx
       ..layout = layout
       ..colors = _colors
       ..quality = _quality
-      ..t = t
+      ..t = tm
       ..energy = e
-      ..flow = energy.flow(t)
+      ..flow = still ? EnergyTrack.speed(e) * tm : energy.flow(t)
       ..heat = heat
       ..accuracy = _accuracy
       ..progress = _next == null ? 0 : _progress
@@ -466,9 +531,9 @@ class VizScene {
 
     // Model activation: a slow breath from input to output, plus smooth
     // flicker while the model is untrained.
-    final breathPhase = 2 * math.pi * t / 5.5;
-    final noiseStep = (t * 1.5).floorToDouble();
-    final noiseT = smoothstep(0, 1, t * 1.5 - noiseStep);
+    final breathPhase = 2 * math.pi * tm / 5.5;
+    final noiseStep = (tm * 1.5).floorToDouble();
+    final noiseT = smoothstep(0, 1, tm * 1.5 - noiseStep);
     final flicker = 0.12 * (1 - _contrast);
     for (var i = 0; i < n; i++) {
       final layer = layout.layerOf[i];
@@ -488,20 +553,20 @@ class VizScene {
     var signalAlpha = 1.0;
     final transition = _transition;
     if (transition != null && !transition.isDone(t)) {
-      signalAlpha = _evaluateTransition(transition, layout, t);
+      signalAlpha = _evaluateTransition(transition, layout, t, tm);
       ctx.motifAlpha = frame.networkPictureAlpha;
     } else if (layout.isRings) {
-      _drawRings(layout, t);
+      _drawRings(layout, tm);
     }
 
-    if (layout.isRings) _ringEdgesAt(layout, t);
+    if (layout.isRings) _ringEdgesAt(layout, tm);
 
-    _predict(layout, t);
+    _predict(layout, tm);
     if (signalAlpha > 0) {
-      _signals(layout, t, e, heat, afterglow, signalAlpha);
+      _signals(layout, tm, e, heat, afterglow, signalAlpha);
     }
     _waves(layout, t, signalAlpha);
-    if (transition == null) _progressEffects(layout, t);
+    if (transition == null) _progressEffects(layout, tm);
     _motif.evaluate(ctx);
     _emitNeurons(layout);
   }
@@ -1139,17 +1204,19 @@ class VizScene {
   // ---------------------------------------------------------- transitions
 
   /// Draws the network while it transforms. Returns the opacity for
-  /// signals (0 while the structure is changing).
+  /// signals (0 while the structure is changing). The transition runs on
+  /// [t]; rotating rings are placed at the motion time [tm].
   double _evaluateTransition(
     SceneTransition tr,
     NetworkLayout layout,
     double t,
+    double tm,
   ) {
     final el = tr.elapsed(t);
-    final settle = tr.duration - 0.45;
+    final settle = tr.settleAt;
     final fadeIn = tr.style == TransitionStyle.crossfade
         ? clamp01(el / tr.duration)
-        : clamp01((el - settle) / 0.45);
+        : clamp01((el - settle) / (tr.duration - settle));
     // The static picture fades in over the dynamic drawing (columns only).
     frame.networkPictureAlpha = layout.isRings ? 0 : fadeIn;
     if (tr.style == TransitionStyle.crossfade) {
@@ -1157,7 +1224,7 @@ class VizScene {
       for (var i = 0; i < layout.neuronCount; i++) {
         _a[i] *= fadeIn;
       }
-      if (layout.isRings) _drawRings(layout, t);
+      if (layout.isRings) _drawRings(layout, tm);
       return fadeIn;
     }
     final dynamicAlpha = layout.isRings ? 1.0 : 1 - fadeIn;
@@ -1202,7 +1269,7 @@ class VizScene {
         if (from != null && el < 0.52) {
           final gather = easeInCubic(el / 0.4);
           final vanish = el < 0.4 ? 1.0 : 1 - (el - 0.4) / 0.12;
-          _drawOld(tr, from, 1 + gather, vanish, 0.6 * gather, null);
+          _drawOld(tr, from, 1 + gather, vanish, 0.6 * gather);
         }
         _shockwaves(tr, el, gx, gy, diagonal, 0.4, _colors.structure, 0.6);
         _bloom(el - 0.4, 0.4, gx, gy, 0.5 * diagonal, 0.35);
@@ -1210,11 +1277,16 @@ class VizScene {
         newFrom = 0.75;
         if (from != null && el < 0.75) {
           final q = easeInCubic(el / 0.7);
-          _drawOld(tr, from, 1 - q, 1 - clamp01((el - 0.6) / 0.15), 0.3 * q, (
-            gx,
-            gy,
-            q,
-          ));
+          _drawOld(
+            tr,
+            from,
+            1 - q,
+            1 - clamp01((el - 0.6) / 0.15),
+            0.3 * q,
+            pullX: gx,
+            pullY: gy,
+            pull: q,
+          );
         }
         _shockwaves(tr, el, gx, gy, diagonal, 0.7, _colors.success, 0.45);
         _bloom(el - 0.7, 0.4, gx, gy, 0.25 * diagonal, 0.3);
@@ -1241,7 +1313,7 @@ class VizScene {
       }
       final delay =
           newFrom + 0.04 * layer + 0.018 * (index - (size - 1) / 2).abs();
-      final q = clamp01((el - delay) / 0.65);
+      final q = clamp01((el - delay) / tr.flight);
       final p = tr.parent[i];
       double sx, sy, sr;
       bool moves;
@@ -1291,7 +1363,7 @@ class VizScene {
     final weaveFrom = tr.style == TransitionStyle.unfold ? 0.0 : newFrom + 0.4;
     if (el >= weaveFrom) {
       if (targetsAreRings) {
-        _ringEdgesAt(layout, t);
+        _ringEdgesAt(layout, tm);
         for (var k = 0; k < _ringEdges; k++) {
           final s = _ringSrc[k], d = _ringDst[k];
           _weave(
@@ -1361,20 +1433,19 @@ class VizScene {
   }
 
   /// The outgoing network, drawn from the snapshot: brighter while
-  /// gathering, then vanishing; optionally pulled towards a point.
+  /// gathering, then vanishing; pulled towards ([pullX], [pullY]) by
+  /// [pull] (0: not at all). Allocation-free, like the rest of evaluate.
   void _drawOld(
     SceneTransition tr,
     NetworkLayout from,
     double edgeGain,
     double visible,
-    double glow,
-    (double, double, double)? pull,
-  ) {
+    double glow, {
+    double pullX = 0,
+    double pullY = 0,
+    double pull = 0,
+  }) {
     if (visible <= 0) return;
-    double px(int i) =>
-        pull == null ? tr.fromX[i] : lerp(tr.fromX[i], pull.$1, pull.$3);
-    double py(int i) =>
-        pull == null ? tr.fromY[i] : lerp(tr.fromY[i], pull.$2, pull.$3);
     if (!from.isRings) {
       for (var e = 0; e < from.edgeCount; e++) {
         final s = from.edgeSrc[e], d = from.edgeDst[e];
@@ -1384,24 +1455,26 @@ class VizScene {
           EdgeStyle.alpha(strength, highContrast: highContrast) * edgeGain,
         );
         frame.addBaseEdge(
-          px(s),
-          py(s),
-          px(d),
-          py(d),
+          lerp(tr.fromX[s], pullX, pull),
+          lerp(tr.fromY[s], pullY, pull),
+          lerp(tr.fromX[d], pullX, pull),
+          lerp(tr.fromY[d], pullY, pull),
           from.weight[e] < 0,
           alpha * visible,
           EdgeStyle.isWide(strength),
         );
       }
     }
+    final shrink = 1 - 0.5 * pull;
     for (var i = 0; i < from.neuronCount; i++) {
-      final shrink = pull == null ? 1.0 : 1 - 0.5 * pull.$3;
+      final x = lerp(tr.fromX[i], pullX, pull);
+      final y = lerp(tr.fromY[i], pullY, pull);
       final r = tr.fromR[i] * shrink;
-      frame.addBody(px(i), py(i), r, visible, from.shape[i]);
+      frame.addBody(x, y, r, visible, from.shape[i]);
       frame.glow.add(
         Sprites.glow,
-        px(i),
-        py(i),
+        x,
+        y,
         6 * r,
         _colors.structure,
         0.55 * clamp01(0.25 + glow) * visible,

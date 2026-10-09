@@ -5,11 +5,13 @@ import 'dart:typed_data';
 ///
 /// - The first value and any decrease only set the baseline, so loading a
 ///   save never fires a burst.
-/// - At most one wave starts every [minWaveGap] seconds (3 per second, safe
-///   for photosensitive viewers) and at most [maxWaves] are alive. Extra taps
-///   boost the newest wave or just heat the network.
+/// - At most one wave starts every [minWaveGap] seconds (never more than 3
+///   in any one-second window, safe for photosensitive viewers) and at most
+///   [maxWaves] are alive. Extra taps boost the newest wave or just heat the
+///   network.
 class TapTracker {
-  static const minWaveGap = 0.333;
+  /// Slightly over 1/3 s, so four starts always span more than a second.
+  static const minWaveGap = 0.34;
   static const maxWaves = 4;
   static const waveLife = 1.0;
   static const _heatPerTap = 0.12, _heatTau = 0.8;
@@ -33,28 +35,33 @@ class TapTracker {
   /// Number of taps ever registered (not reset by re-baselining).
   int get serial => _serial;
 
-  /// Feeds the latest counter value seen at scene time [t].
-  void update(double t, int count) {
+  /// When the newest wave started (−∞ before the first).
+  double get lastWaveStart => _lastWave;
+
+  /// Feeds the latest counter value seen at scene time [t]. With
+  /// [heatOnly] (while the network transforms) taps start no waves.
+  void update(double t, int count, {bool heatOnly = false}) {
     final baseline = _baseline;
     _baseline = count;
     if (baseline == null || count <= baseline) return;
     final delta = count - baseline;
     if (delta > 3) {
-      tap(t);
+      tap(t, heatOnly: heatOnly);
       for (var i = 1; i < math.min(delta, _heatSlots); i++) {
         _addHeat(t);
       }
     } else {
       for (var i = 0; i < delta; i++) {
-        tap(t);
+        tap(t, heatOnly: heatOnly);
       }
     }
   }
 
   /// Registers one manual training step at [t].
-  void tap(double t) {
+  void tap(double t, {bool heatOnly = false}) {
     _serial++;
     _addHeat(t);
+    if (heatOnly) return;
     if (t - _lastWave >= minWaveGap && aliveWaves(t) < maxWaves) {
       final slot = _waveNext;
       _waveNext = (_waveNext + 1) % maxWaves;

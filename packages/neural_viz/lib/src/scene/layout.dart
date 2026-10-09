@@ -50,7 +50,7 @@ class NetworkLayout {
     required this.ringRadius,
     required this.ringAngle,
     required this.coreRadius,
-  });
+  }) : center = content.center;
 
   factory NetworkLayout.build(
     NetworkTopology topology,
@@ -117,7 +117,9 @@ class NetworkLayout {
   int get neuronCount => layerStart[layerStart.length - 1];
   int get edgeCount => edgeSrc.length;
   bool get isRings => kind == NetworkKind.agi;
-  Offset get center => content.center;
+
+  /// Center of [content]. Stored, so per-frame reads allocate nothing.
+  final Offset center;
 
   int layerSize(int layer) => layerStart[layer + 1] - layerStart[layer];
 
@@ -162,6 +164,10 @@ class _LayoutBuilder {
   }
 
   double snap(double v) => (v * dpr).roundToDouble() / dpr;
+
+  /// Column neuron radius for a vertical [pitch], before the per-kind
+  /// factor.
+  static double _bodyRadius(double pitch) => (0.30 * pitch).clamp(3.5, 11.0);
 
   NetworkLayout build() {
     final w = size.width, h = size.height;
@@ -219,20 +225,55 @@ class _LayoutBuilder {
     var captionY = 0.0;
 
     if (kind == NetworkKind.agi) {
-      final rMax = math.min(
-        content.width / 2,
-        content.height / (2 * kRingSquash),
-      );
       ringRadius = Float32List(layers.length);
       ringAngle = Float32List(count);
-      var spacing = double.infinity;
-      for (var k = 0; k < layers.length; k++) {
-        ringRadius[k] =
-            rMax * (0.30 + 0.70 * k / math.max(1, layers.length - 1));
-        spacing = math.min(spacing, 2 * math.pi * ringRadius[k] / layers[k]);
+      final rings = layers.length;
+      double ringRadiusOf(double rMax, int k) =>
+          rMax * (0.30 + 0.70 * k / math.max(1, rings - 1));
+      // Smallest distance between neighbors on a ring.
+      double spacingFor(double rMax) {
+        var spacing = double.infinity;
+        for (var k = 0; k < rings; k++) {
+          spacing = math.min(
+            spacing,
+            2 * math.pi * ringRadiusOf(rMax, k) / layers[k],
+          );
+        }
+        return spacing;
       }
-      r = (0.30 * spacing).clamp(3.5, 9.0);
-      coreRadius = 0.14 * rMax;
+
+      // Body radius: a fraction of the neighbor spacing, and small enough
+      // that bodies on adjacent rings never touch where the squashed
+      // ellipses are closest.
+      double radiusFor(double rMax) => math
+          .min(
+            0.30 * spacingFor(rMax),
+            0.5 * kRingSquash * 0.70 * rMax / math.max(1, rings - 1),
+          )
+          .clamp(3.5, 9.0);
+
+      // The outer ring's bodies stay inside the content rect at any angle
+      // (shrinking the rings only shrinks the bodies).
+      final reach = radiusFor(
+        math.min(content.width / 2, content.height / (2 * kRingSquash)),
+      );
+      final rMax = math.max(
+        1.0,
+        math.min(
+          content.width / 2 - reach,
+          (content.height / 2 - reach) / kRingSquash,
+        ),
+      );
+      for (var k = 0; k < rings; k++) {
+        ringRadius[k] = ringRadiusOf(rMax, k);
+      }
+      final spacing = spacingFor(rMax);
+      r = radiusFor(rMax);
+      // The core keeps clear of the innermost ring's bodies.
+      coreRadius = math.max(
+        0.0,
+        math.min(0.14 * rMax, ringRadius[0] * kRingSquash - r),
+      );
       gap = rMax * 0.175;
       pitch = spacing;
       final c = content.center;
@@ -249,23 +290,48 @@ class _LayoutBuilder {
       }
     } else {
       final columns = layers.length - 1;
-      gap = math.min(
-        content.width / columns,
-        layers.length == 2 ? 240.0 : 170.0,
-      );
       final maxN = layers.reduce(math.max);
       // Multimodal inputs leave room for the gaps between modality groups.
       final rows = kind == NetworkKind.multimodal
           ? math.max(maxN.toDouble(), layers[0] + 1.2)
           : maxN.toDouble();
-      pitch = math.min(math.min(content.height / rows, 0.9 * gap), 44.0);
       final factor = switch (kind) {
         NetworkKind.perceptron => 1.25,
         NetworkKind.mlp => 1.1,
         _ => 1.0,
       };
-      r = (0.30 * pitch).clamp(3.5, 11.0) * factor;
-      final x0 = content.center.dx - gap * columns / 2;
+      // Bodies reach this far beyond the first and last column centers
+      // (multimodal diamonds are 1.2× wide, the perceptron output 1.8×).
+      final leftReach = kind == NetworkKind.multimodal ? 1.2 : 1.0;
+      final rightReach = kind == NetworkKind.perceptron ? 1.8 : 1.0;
+      double radiusFor(double gap) {
+        final pitch = math.min(
+          math.min(content.height / rows, 0.9 * gap),
+          44.0,
+        );
+        return _bodyRadius(pitch) * factor;
+      }
+
+      gap = math.min(
+        content.width / columns,
+        layers.length == 2 ? 240.0 : 170.0,
+      );
+      // Keep the outer bodies inside the content rect: narrow the columns
+      // by the reach of the bodies at this gap (narrowing only shrinks them),
+      // leaving half a pixel per side for snapping.
+      gap = math.max(
+        1.0,
+        math.min(
+          gap,
+          (content.width - 1 - (leftReach + rightReach) * radiusFor(gap)) /
+              columns,
+        ),
+      );
+      pitch = math.min(math.min(content.height / rows, 0.9 * gap), 44.0);
+      r = _bodyRadius(pitch) * factor;
+      final x0 =
+          content.center.dx -
+          (gap * columns + (rightReach - leftReach) * r) / 2;
       var lowest = 0.0;
       for (var l = 0; l < layers.length; l++) {
         layerX[l] = snap(x0 + gap * l);

@@ -157,6 +157,8 @@ class FrameBuffers {
     networkPictureAlpha = 0;
     previousPictureAlpha = 0;
     scale = 1;
+    scaleCenterX = 0;
+    scaleCenterY = 0;
   }
 
   /// Picks the alpha level closest to [alpha] (0–1).

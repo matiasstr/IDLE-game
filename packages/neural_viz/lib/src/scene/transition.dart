@@ -82,6 +82,19 @@ class SceneTransition {
     TransitionStyle.crossfade => duration / 2,
   };
 
+  /// When the static picture starts fading in over the dynamic drawing,
+  /// relative to [start]. Flights and weaves finish before it (for the
+  /// stages they target), so the two never show a double image.
+  double get settleAt => switch (style) {
+    TransitionStyle.mitosis => 1.95,
+    TransitionStyle.collapse => 1.32,
+    TransitionStyle.unfold => 0.45,
+    TransitionStyle.crossfade => 0,
+  };
+
+  /// How long a new neuron takes to fly to its place.
+  double get flight => style == TransitionStyle.collapse ? 0.5 : 0.65;
+
   /// Whether the app is told about this transition (the intro is silent).
   bool get notifies => info.kind != VizTransitionKind.intro;
 
