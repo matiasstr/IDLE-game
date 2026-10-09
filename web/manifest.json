@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#07090D",
   "theme_color": "#07090D",
-  "description": "Train your own AI. A neural-network idle game.",
+  "description": "Train your own AI. Build hardware, evolve your model, and publish papers.",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [{"src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
