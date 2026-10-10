@@ -268,4 +268,21 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get previewEvolution => 'Ver evolución';
+
+  @override
+  String get hintTrain => 'Tocá Entrenar modelo para ganar tus primeros tokens';
+
+  @override
+  String hintBuyHardware(String name) {
+    return 'El hardware entrena por vos: comprá $name';
+  }
+
+  @override
+  String hintEvolve(String tokens, String architecture) {
+    return 'Con $tokens tokens tu red evoluciona a $architecture';
+  }
+
+  @override
+  String get hintResearch =>
+      'La investigación multiplica todo. Mirá la pestaña Investigación';
 }

@@ -121,5 +121,26 @@
   "widgetPreview": "Vista previa de widgets",
   "previewTitle": "Vista previa de componentes",
   "previewDescription": "Datos de ejemplo. Estos controles no cambian tu partida.",
-  "previewEvolution": "Ver evolución"
+  "previewEvolution": "Ver evolución",
+  "hintTrain": "Tocá Entrenar modelo para ganar tus primeros tokens",
+  "hintBuyHardware": "El hardware entrena por vos: comprá {name}",
+  "@hintBuyHardware": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "hintEvolve": "Con {tokens} tokens tu red evoluciona a {architecture}",
+  "@hintEvolve": {
+    "placeholders": {
+      "tokens": {
+        "type": "String"
+      },
+      "architecture": {
+        "type": "String"
+      }
+    }
+  },
+  "hintResearch": "La investigación multiplica todo. Mirá la pestaña Investigación"
 }
