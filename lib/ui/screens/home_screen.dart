@@ -443,13 +443,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       text: text.of(engine.phrase(game, (game.playSeconds / 9).floor())),
     );
 
-    Widget trainButton() => KeyedSubtree(
-      key: _trainKey,
-      child: TrainButton(
-        label: l10n.train,
-        gainLabel: text.gain(engine.tapValue(game)),
-        onTap: _controller.train,
-      ),
+    Widget trainButton() => TrainButton(
+      label: l10n.train,
+      gainLabel: text.gain(engine.tapValue(game)),
+      onTap: _controller.train,
+      anchorKey: _trainKey,
     );
 
     return GameLoop(

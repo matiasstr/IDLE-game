@@ -9,10 +9,15 @@ class TrainButton extends StatefulWidget {
     required this.label,
     required this.gainLabel,
     required this.onTap,
+    this.anchorKey,
   });
   final String label;
   final String gainLabel;
   final VoidCallback onTap;
+
+  /// Key on the button itself (without the room above it for the floating
+  /// gains), so hints can point at it.
+  final GlobalKey? anchorKey;
   @override
   State<TrainButton> createState() => _TrainButtonState();
 }
@@ -82,52 +87,55 @@ class _TrainButtonState extends State<TrainButton>
           right: 0,
           bottom: 0,
           height: 72,
-          child: ScaleTransition(
-            scale: _scale,
-            child: AnimatedBuilder(
-              animation: _pulse,
-              builder: (context, child) => DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.neonCyan.withValues(
-                        alpha: 0.12 + _pulse.value * 0.08,
+          child: KeyedSubtree(
+            key: widget.anchorKey,
+            child: ScaleTransition(
+              scale: _scale,
+              child: AnimatedBuilder(
+                animation: _pulse,
+                builder: (context, child) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.neonCyan.withValues(
+                          alpha: 0.12 + _pulse.value * 0.08,
+                        ),
+                        blurRadius: 16 + _pulse.value * 8,
                       ),
-                      blurRadius: 16 + _pulse.value * 8,
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: child,
                 ),
-                child: child,
-              ),
-              child: FilledButton(
-                key: const ValueKey('train-button'),
-                onPressed: _train,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.neonCyan,
-                  foregroundColor: AppColors.background,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.bolt_rounded, size: 24),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Text(
-                        widget.label,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: AppColors.background),
+                child: FilledButton(
+                  key: const ValueKey('train-button'),
+                  onPressed: _train,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.neonCyan,
+                    foregroundColor: AppColors.background,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.bolt_rounded, size: 24),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          widget.label,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: AppColors.background),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Text(
-                      widget.gainLabel,
-                      style: AppTextStyles.number(
-                        size: 14,
-                        color: AppColors.background,
+                      const SizedBox(width: 16),
+                      Text(
+                        widget.gainLabel,
+                        style: AppTextStyles.number(
+                          size: 14,
+                          color: AppColors.background,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

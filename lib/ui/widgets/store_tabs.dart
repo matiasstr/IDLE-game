@@ -26,6 +26,8 @@ class StoreTabs extends StatelessWidget {
       child: Column(
         children: [
           TabBar(
+            // Room for "Research" and its badge in a 280 px column.
+            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
             tabs: [
               Tab(text: l10n.hardware, height: 48),
               Tab(
