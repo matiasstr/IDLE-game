@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:neural_idle/l10n/app_localizations.dart';
+import 'package:neural_idle/theme/app_colors.dart';
 
 class StoreTabs extends StatelessWidget {
   const StoreTabs({
@@ -7,10 +8,12 @@ class StoreTabs extends StatelessWidget {
     required this.hardware,
     required this.research,
     this.stats,
+    this.researchBadge = 0,
   });
   final Widget hardware;
   final Widget research;
   final Widget? stats;
+  final int researchBadge;
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -21,7 +24,34 @@ class StoreTabs extends StatelessWidget {
           TabBar(
             tabs: [
               Tab(text: l10n.hardware, height: 48),
-              Tab(text: l10n.research, height: 48),
+              Tab(
+                height: 48,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        l10n.research,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (researchBadge > 0) ...[
+                      const SizedBox(width: 4),
+                      Semantics(
+                        label: l10n.researchAvailable(researchBadge),
+                        child: ExcludeSemantics(
+                          child: Badge(
+                            key: const ValueKey('research-badge'),
+                            backgroundColor: AppColors.neonLime,
+                            textColor: AppColors.background,
+                            label: Text('$researchBadge'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
               if (stats != null) Tab(text: l10n.stats, height: 48),
             ],
           ),

@@ -277,6 +277,264 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{progress}% to next architecture'**
   String progressLabel(String progress);
+
+  /// No description provided for @ratePerSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'+{value}/s'**
+  String ratePerSecond(String value);
+
+  /// No description provided for @buyQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy ×{count}'**
+  String buyQuantity(String count);
+
+  /// No description provided for @buyMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Buy max'**
+  String get buyMax;
+
+  /// No description provided for @evolvedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New architecture unlocked'**
+  String get evolvedTitle;
+
+  /// No description provided for @offlineEvolved.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Your model did not evolve while you were away} one{Your model evolved once while you were away} other{Your model evolved {count} times while you were away}}'**
+  String offlineEvolved(int count);
+
+  /// No description provided for @statsLifetimeTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Lifetime tokens'**
+  String get statsLifetimeTokens;
+
+  /// No description provided for @statsPlayTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Play time'**
+  String get statsPlayTime;
+
+  /// No description provided for @statsManualTrainings.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual trainings'**
+  String get statsManualTrainings;
+
+  /// No description provided for @statsPapers.
+  ///
+  /// In en, this message translates to:
+  /// **'Published papers'**
+  String get statsPapers;
+
+  /// No description provided for @statsCitations.
+  ///
+  /// In en, this message translates to:
+  /// **'Citations'**
+  String get statsCitations;
+
+  /// No description provided for @statsCitationBonus.
+  ///
+  /// In en, this message translates to:
+  /// **'Citation bonus'**
+  String get statsCitationBonus;
+
+  /// No description provided for @publishPaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish paper'**
+  String get publishPaper;
+
+  /// No description provided for @publishPaperBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Publishing a paper resets your training progress. Your citations stay and give all future training a permanent bonus.'**
+  String get publishPaperBody;
+
+  /// No description provided for @publishConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish and restart'**
+  String get publishConfirm;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @citationsGain.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} citations'**
+  String citationsGain(String count);
+
+  /// No description provided for @publishLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Reach the Transformer to publish your first paper'**
+  String get publishLocked;
+
+  /// No description provided for @resetProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset progress'**
+  String get resetProgress;
+
+  /// No description provided for @resetProgressConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all training progress, papers, and citations? This cannot be undone.'**
+  String get resetProgressConfirm;
+
+  /// No description provided for @exportSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Export save'**
+  String get exportSave;
+
+  /// No description provided for @importSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Import save'**
+  String get importSave;
+
+  /// No description provided for @importInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'This save could not be imported. Check the text and try again.'**
+  String get importInvalid;
+
+  /// No description provided for @copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copy;
+
+  /// No description provided for @copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get copied;
+
+  /// No description provided for @about.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get about;
+
+  /// No description provided for @sourceCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Source code'**
+  String get sourceCode;
+
+  /// No description provided for @builtWithFlutter.
+  ///
+  /// In en, this message translates to:
+  /// **'Built with Flutter'**
+  String get builtWithFlutter;
+
+  /// No description provided for @networkSemanticLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Neural network: {architecture}'**
+  String networkSemanticLabel(String architecture);
+
+  /// No description provided for @trainSemanticHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Train the model once'**
+  String get trainSemanticHint;
+
+  /// No description provided for @buyAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase amount'**
+  String get buyAmount;
+
+  /// No description provided for @researchAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 affordable upgrade} other{{count} affordable upgrades}}'**
+  String researchAvailable(int count);
+
+  /// No description provided for @currentCitations.
+  ///
+  /// In en, this message translates to:
+  /// **'Current citations'**
+  String get currentCitations;
+
+  /// No description provided for @bonusAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'Bonus after publishing'**
+  String get bonusAfter;
+
+  /// No description provided for @saveData.
+  ///
+  /// In en, this message translates to:
+  /// **'Save data'**
+  String get saveData;
+
+  /// No description provided for @importSaveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste an exported save'**
+  String get importSaveHint;
+
+  /// No description provided for @importSaveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing replaces your current game progress.'**
+  String get importSaveBody;
+
+  /// No description provided for @exportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The save could not be exported. Try again.'**
+  String get exportFailed;
+
+  /// No description provided for @copyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not copy. Select the text to copy it manually.'**
+  String get copyFailed;
+
+  /// No description provided for @versionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String versionLabel(String version);
+
+  /// No description provided for @widgetPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'Widget preview'**
+  String get widgetPreview;
+
+  /// No description provided for @previewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Component preview'**
+  String get previewTitle;
+
+  /// No description provided for @previewDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo data. These controls do not change your game.'**
+  String get previewDescription;
+
+  /// No description provided for @previewEvolution.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview evolution'**
+  String get previewEvolution;
 }
 
 class _AppLocalizationsDelegate

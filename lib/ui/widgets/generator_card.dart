@@ -16,6 +16,7 @@ class GeneratorCard extends StatelessWidget {
     required this.canAfford,
     this.locked = false,
     this.onBuy,
+    this.quantityLabel,
   });
   final IconData icon;
   final String name;
@@ -26,6 +27,7 @@ class GeneratorCard extends StatelessWidget {
   final bool canAfford;
   final bool locked;
   final VoidCallback? onBuy;
+  final String? quantityLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +122,7 @@ class GeneratorCard extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                       Text(
-                        cost,
+                        quantityLabel == null ? cost : '$cost · $quantityLabel',
                         style: AppTextStyles.number(
                           size: 12,
                           color: active

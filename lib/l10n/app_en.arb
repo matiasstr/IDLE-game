@@ -7,7 +7,16 @@
   "loss": "Loss",
   "architecture": "Architecture",
   "stageLabel": "Stage {stage} / {total}",
-  "@stageLabel": {"placeholders": {"stage": {"type": "int"}, "total": {"type": "int"}}},
+  "@stageLabel": {
+    "placeholders": {
+      "stage": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "nextArchitecture": "Next architecture",
   "train": "Train model",
   "buy": "Buy",
@@ -22,7 +31,16 @@
   "systemLanguage": "Use device language",
   "offlineTitle": "Welcome back, trainer",
   "offlineBody": "While you were away, your AI trained for {duration} and earned {tokens} tokens.",
-  "@offlineBody": {"placeholders": {"duration": {"type": "String"}, "tokens": {"type": "String"}}},
+  "@offlineBody": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      },
+      "tokens": {
+        "type": "String"
+      }
+    }
+  },
   "collect": "Collect tokens",
   "trainingLab": "TRAINING LAB",
   "modelStatus": "Model status",
@@ -32,5 +50,103 @@
   "debugOffline": "Preview offline progress",
   "close": "Close",
   "progressLabel": "{progress}% to next architecture",
-  "@progressLabel": {"placeholders": {"progress": {"type": "String"}}}
+  "@progressLabel": {
+    "placeholders": {
+      "progress": {
+        "type": "String"
+      }
+    }
+  },
+  "ratePerSecond": "+{value}/s",
+  "@ratePerSecond": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "buyQuantity": "Buy ×{count}",
+  "@buyQuantity": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "buyMax": "Buy max",
+  "evolvedTitle": "New architecture unlocked",
+  "offlineEvolved": "{count, plural, =0{Your model did not evolve while you were away} one{Your model evolved once while you were away} other{Your model evolved {count} times while you were away}}",
+  "@offlineEvolved": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsLifetimeTokens": "Lifetime tokens",
+  "statsPlayTime": "Play time",
+  "statsManualTrainings": "Manual trainings",
+  "statsPapers": "Published papers",
+  "statsCitations": "Citations",
+  "statsCitationBonus": "Citation bonus",
+  "publishPaper": "Publish paper",
+  "publishPaperBody": "Publishing a paper resets your training progress. Your citations stay and give all future training a permanent bonus.",
+  "publishConfirm": "Publish and restart",
+  "cancel": "Cancel",
+  "citationsGain": "+{count} citations",
+  "@citationsGain": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "publishLocked": "Reach the Transformer to publish your first paper",
+  "resetProgress": "Reset progress",
+  "resetProgressConfirm": "Delete all training progress, papers, and citations? This cannot be undone.",
+  "exportSave": "Export save",
+  "importSave": "Import save",
+  "importInvalid": "This save could not be imported. Check the text and try again.",
+  "copy": "Copy",
+  "copied": "Copied",
+  "about": "About",
+  "sourceCode": "Source code",
+  "builtWithFlutter": "Built with Flutter",
+  "networkSemanticLabel": "Neural network: {architecture}",
+  "@networkSemanticLabel": {
+    "placeholders": {
+      "architecture": {
+        "type": "String"
+      }
+    }
+  },
+  "trainSemanticHint": "Train the model once",
+  "buyAmount": "Purchase amount",
+  "researchAvailable": "{count, plural, one{1 affordable upgrade} other{{count} affordable upgrades}}",
+  "@researchAvailable": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "currentCitations": "Current citations",
+  "bonusAfter": "Bonus after publishing",
+  "saveData": "Save data",
+  "importSaveHint": "Paste an exported save",
+  "importSaveBody": "Importing replaces your current game progress.",
+  "exportFailed": "The save could not be exported. Try again.",
+  "copyFailed": "Could not copy. Select the text to copy it manually.",
+  "versionLabel": "Version {version}",
+  "@versionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "widgetPreview": "Widget preview",
+  "previewTitle": "Component preview",
+  "previewDescription": "Demo data. These controls do not change your game.",
+  "previewEvolution": "Preview evolution"
 }
