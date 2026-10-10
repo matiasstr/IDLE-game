@@ -890,10 +890,11 @@ class VizScene {
           rgb,
           0.55 * strength,
           angle,
+          from,
         );
       }
     }
-    frame.glow.add(Sprites.dot, hx, hy, 0.8 * r + 2.5, rgb, strength);
+    frame.glow.add(Sprites.dot, hx, hy, 0.8 * r + 2.5, rgb, strength, 0, from);
   }
 
   /// Returns the offset of slot [k]'s path in [_pathNodes] for cycle [cyc],
@@ -1056,6 +1057,8 @@ class VizScene {
           radius * 2 * 48 / 42,
           _colors.signal,
           0.6 * (1 - q),
+          0,
+          i,
         );
       }
     }
@@ -1190,6 +1193,7 @@ class VizScene {
           _y[s] + dy * lo,
           _x[s] + dx * hi,
           _y[s] + dy * hi,
+          s,
         );
   }
 

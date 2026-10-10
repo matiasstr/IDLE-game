@@ -35,7 +35,7 @@ class MultimodalMotif extends Motif {
   /// speeds up with production without ever jumping.
   static const _samplesPerGap = 7.0;
 
-  // Scratch results of [_laneAt] (static: evaluate must not allocate).
+  // Scratch results of [_laneOfTag] (static: evaluate must not allocate).
   static double _u = 0;
   static int _pair = 0;
 
@@ -401,34 +401,18 @@ class MultimodalMotif extends Motif {
   /// Lane of the encoder edge passing through (px, py), or -1 outside the
   /// encoders. Sets [_pair] (0 input → encoder, 1 encoder → fusion) and
   /// [_u], the position along that edge.
-  static int _laneAt(FrameContext ctx, double px, double py) {
+  /// Lane of a scene sprite or segment from the neuron it was tagged with
+  /// (its source): O(1), no search. Also sets [_pair] (0 input→encoder,
+  /// 1 encoder→fusion) and [_u] (position along that pair, 0–1).
+  static int _laneOfTag(FrameContext ctx, int tag, double px) {
+    if (tag < 0) return -1;
     final layout = ctx.layout;
-    final xa = layout.layerX[0], xb = layout.layerX[1];
-    final xc = layout.layerX[fusionLayer];
-    if (px < xa - 0.5 || px >= xc) return -1;
-    final pair = px <= xb ? 0 : 1;
-    final from = pair == 0 ? xa : xb, to = pair == 0 ? xb : xc;
-    final u = to > from ? clamp01((px - from) / (to - from)) : 0.0;
-    var best = double.infinity;
-    var lane = -1;
-    for (
-      var s = layout.layerStart[pair];
-      s < layout.layerStart[pair + 1];
-      s++
-    ) {
-      final ys = ctx.y[s];
-      for (var o = layout.outStart[s]; o < layout.outStart[s + 1]; o++) {
-        final d = layout.edgeDst[layout.outEdges[o]];
-        final error = (ys + (ctx.y[d] - ys) * u - py).abs();
-        if (error < best) {
-          best = error;
-          lane = laneOf(layout, s);
-        }
-      }
-    }
+    final pair = layout.layerOf[tag];
+    if (pair >= fusionLayer) return -1;
+    final from = layout.layerX[pair], to = layout.layerX[pair + 1];
     _pair = pair;
-    _u = u;
-    return best < 2 * layout.r ? lane : -1;
+    _u = to > from ? clamp01((px - from) / (to - from)) : 0.0;
+    return laneOf(layout, tag);
   }
 
   /// Gives every cyan sprite inside the encoder lanes (signal heads, trails,
@@ -446,8 +430,7 @@ class MultimodalMotif extends Motif {
       final ax = (glow.rects[o + 2] - glow.rects[o]) / 2;
       final ay = (glow.rects[o + 3] - glow.rects[o + 1]) / 2;
       final cx = glow.transforms[o + 2] + scos * ax - ssin * ay;
-      final cy = glow.transforms[o + 3] + ssin * ax + scos * ay;
-      final lane = _laneAt(ctx, cx, cy);
+      final lane = _laneOfTag(ctx, glow.tags[i], cx);
       if (lane <= 0) continue;
       var mix = alpha;
       if (_pair == 1) mix *= 1 - smoothstep(0.55, 1, _u);
@@ -471,10 +454,11 @@ class MultimodalMotif extends Motif {
         final i = s * 4;
         final x1 = points[i], y1 = points[i + 1];
         final x2 = points[i + 2], y2 = points[i + 3];
-        final lane = _laneAt(ctx, (x1 + x2) / 2, (y1 + y2) / 2);
+        final tag = bucket.tags[s];
+        final lane = _laneOfTag(ctx, tag, (x1 + x2) / 2);
         if (lane > 0 && (_pair == 0 || _u < 0.8)) {
           final hue = lane == 1 ? LineHue.success : LineHue.accent;
-          frame.lit[hue.index][level].add(x1, y1, x2, y2);
+          frame.lit[hue.index][level].add(x1, y1, x2, y2, tag);
           continue;
         }
         final k = kept * 4;
@@ -482,6 +466,7 @@ class MultimodalMotif extends Motif {
         points[k + 1] = y1;
         points[k + 2] = x2;
         points[k + 3] = y2;
+        bucket.tags[kept] = tag;
         kept++;
       }
       bucket.count = kept;

@@ -9,11 +9,16 @@ class SpriteBatch {
   SpriteBatch(this.capacity)
     : transforms = Float32List(capacity * 4),
       rects = Float32List(capacity * 4),
-      colors = Int32List(capacity);
+      colors = Int32List(capacity),
+      tags = Int32List(capacity);
 
   final int capacity;
   final Float32List transforms, rects;
   final Int32List colors;
+
+  /// The neuron each sprite belongs to (a signal's source neuron, a ripple's
+  /// input), or -1. Lets motifs restyle scene sprites without searching.
+  final Int32List tags;
   int count = 0;
 
   /// Scale of the atlas the rects refer to (pixels per logical pixel).
@@ -32,6 +37,7 @@ class SpriteBatch {
     int rgb,
     double alpha, [
     double rotation = 0,
+    int tag = -1,
   ]) {
     if (count >= capacity || alpha < 1 / 255 || width <= 0.05) return;
     final a = (alpha >= 1 ? 255 : (alpha * 255).round()) & 0xff;
@@ -50,6 +56,7 @@ class SpriteBatch {
     rects[i + 2] = (cell.x + cell.width) * atlasScale;
     rects[i + 3] = (cell.y + cell.height) * atlasScale;
     colors[count] = (a << 24) | (rgb & 0xffffff);
+    tags[count] = tag;
     count++;
   }
 
@@ -61,21 +68,27 @@ class SpriteBatch {
 
 /// Line segments for one `drawRawPoints(PointMode.lines)` call.
 class LineBucket {
-  LineBucket(this.capacity) : points = Float32List(capacity * 4);
+  LineBucket(this.capacity)
+    : points = Float32List(capacity * 4),
+      tags = Int32List(capacity);
 
   final int capacity;
   final Float32List points;
+
+  /// The source neuron of each segment (an edge flare's source), or -1.
+  final Int32List tags;
   int count = 0;
 
   void clear() => count = 0;
 
-  void add(double x1, double y1, double x2, double y2) {
+  void add(double x1, double y1, double x2, double y2, [int tag = -1]) {
     if (count >= capacity) return;
     final i = count * 4;
     points[i] = x1;
     points[i + 1] = y1;
     points[i + 2] = x2;
     points[i + 3] = y2;
+    tags[count] = tag;
     count++;
   }
 
