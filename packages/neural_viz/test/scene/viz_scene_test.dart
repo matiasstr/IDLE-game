@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:neural_viz/neural_viz.dart';
 import 'package:neural_viz/src/render/sprite_atlas.dart';
 import 'package:neural_viz/src/scene/frame_buffers.dart';
+import 'package:neural_viz/src/scene/transition.dart';
 import 'package:neural_viz/src/scene/viz_scene.dart';
 
 import '../helpers/viz_fixtures.dart';
@@ -348,6 +349,28 @@ void main() {
     });
   });
 
+  test('a new contrast bucket does not re-route signals mid-flight', () {
+    for (final stage in const [2, 4]) {
+      final d = SceneDriver(stage, production: 1e6, progress: 0.30);
+      List<(double, double)> heads() {
+        final f = d.frameAt(3.3);
+        return [
+          for (var i = 0; i < f.glow.count; i++)
+            if (f.glow.rects[i * 4] == Sprites.dot.x * f.glow.atlasScale)
+              (f.glow.transforms[i * 4 + 2], f.glow.transforms[i * 4 + 3]),
+        ];
+      }
+
+      final before = heads();
+      d
+        ..progress =
+            0.3255 // next contrast bucket
+        ..apply(3.3);
+      expect(heads(), before, reason: 'stage $stage');
+      d.dispose();
+    }
+  });
+
   group('progress effects', () {
     test('ghosts appear where the next stage adds neurons', () {
       for (var stage = 0; stage < 7; stage++) {
@@ -492,8 +515,13 @@ void main() {
       final (d, _) = watched(2);
       final before = d.scene.layout!;
       d.goTo(1, 3);
-      final f = d.frameAt(1);
-      expect(f.scale, 1);
+      // The first frame still shows the old static picture (captions and
+      // motif included), then hands over to the dynamic drawing.
+      final f0 = d.frameAt(1);
+      expect(f0.scale, 1);
+      expect(f0.previousPictureAlpha, 1);
+      final f = d.frameAt(1 + SceneTransition.pictureHandover);
+      expect(f.previousPictureAlpha, closeTo(0, 1e-9));
       expect(f.bodyCount, before.neuronCount);
       for (var i = 0; i < f.bodyCount; i++) {
         expect(f.bodyX[i], before.x[i]);
@@ -634,6 +662,57 @@ void main() {
         }
         d.dispose();
       }
+    });
+
+    test('a change before the new neurons appear keeps the old network', () {
+      for (final (start, first, second, at) in const [
+        (1, 2, 3, 1.2),
+        (1, 2, 3, 1.4),
+        (3, 4, 0, 1.3),
+        (4, 5, 0, 1.1),
+      ]) {
+        final (d, _) = watched(start);
+        d.goTo(1, first);
+        final before = d.frameAt(at);
+        final bodies = [
+          for (var i = 0; i < before.bodyCount; i++)
+            (before.bodyX[i], before.bodyY[i], before.bodyAlpha[i]),
+        ];
+        final picture = before.previousPictureAlpha;
+        d.goTo(at, second);
+        final after = d.frameAt(at);
+        expect(after.previousPictureAlpha, closeTo(picture, 1e-9));
+        expect(after.bodyCount, bodies.length, reason: '$first → $second');
+        for (var i = 0; i < after.bodyCount; i++) {
+          expect(after.bodyX[i], closeTo(bodies[i].$1, 1e-6));
+          expect(after.bodyY[i], closeTo(bodies[i].$2, 1e-6));
+          expect(after.bodyAlpha[i], closeTo(bodies[i].$3, 1e-6));
+        }
+        d.dispose();
+      }
+    });
+
+    test('a superseded transition still reports its peak and end', () {
+      final (d, log) = watched(1);
+      d.goTo(1, 2);
+      d.scene.tick(1.1); // before the first peak
+      d.goTo(1.2, 3);
+      d.scene.tick(1.25);
+      expect(log, ['peak evolve', 'end evolve']);
+      d.scene.tick(1.2 + 2.5);
+      expect(log, ['peak evolve', 'end evolve', 'peak evolve', 'end evolve']);
+      d.dispose();
+    });
+
+    test('with transitions off a topology change just switches', () {
+      final d = SceneDriver(2)..frameAt(0.5);
+      d.scene.animateTransitions = false;
+      d.goTo(1, 3);
+      expect(d.scene.transition, isNull);
+      d.frameAt(1);
+      expect(d.scene.layout!.topology, stageTopology(3));
+      expect(d.scene.staticNetworkVisible, isTrue);
+      d.dispose();
     });
 
     test('a multi-stage jump draws one shockwave per stage, up to 3', () {

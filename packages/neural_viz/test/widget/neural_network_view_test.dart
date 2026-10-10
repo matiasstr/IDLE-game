@@ -429,6 +429,30 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('a screen reader can activate the train button', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      var trained = 0;
+      await tester.pumpWidget(
+        _host(
+          _view(
+            2,
+            semanticLabel: 'Train the network',
+            onTrain: () => trained++,
+          ),
+        ),
+      );
+      final node = tester.getSemantics(
+        find.bySemanticsLabel('Train the network'),
+      );
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+      expect(trained, 1);
+      await tester.pumpWidget(const SizedBox());
+      handle.dispose();
+    });
+
     testWidgets('without a label the view is hidden from semantics', (
       tester,
     ) async {

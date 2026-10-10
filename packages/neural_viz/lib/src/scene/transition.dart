@@ -16,9 +16,13 @@ class SceneTransition {
     Float32List? fromX,
     Float32List? fromY,
     Float32List? fromR,
+    Float32List? fromA,
+    this.fromContrast = 0,
+    this.initialHandover = 0,
   }) : fromX = fromX ?? Float32List(0),
        fromY = fromY ?? Float32List(0),
        fromR = fromR ?? Float32List(0),
+       fromA = fromA ?? Float32List(0),
        parent = Int32List(to.neuronCount),
        firstChild = Uint8List(to.neuronCount),
        orphan = Uint8List(from?.neuronCount ?? 0) {
@@ -40,6 +44,21 @@ class SceneTransition {
   /// Where the old neurons were drawn when the transition started, so an
   /// interrupted transition never jumps.
   final Float32List fromX, fromY, fromR;
+
+  /// How opaque each old neuron was (back-of-ring units are dimmer).
+  final Float32List fromA;
+
+  /// The training contrast the old network was drawn with, so its weights
+  /// keep their look instead of snapping to the new stage's contrast.
+  final double fromContrast;
+
+  /// How far the outgoing picture had already handed over to the dynamic
+  /// drawing when this transition started (1: no picture on screen).
+  final double initialHandover;
+
+  /// Picture-to-dynamic handover progress at [el] seconds in, 0–1.
+  double handoverAt(double el) =>
+      (initialHandover + el / pictureHandover).clamp(0.0, 1.0);
 
   /// For each new neuron, the old neuron it grows out of (-1: none).
   final Int32List parent;
@@ -91,6 +110,18 @@ class SceneTransition {
     TransitionStyle.unfold => 0.45,
     TransitionStyle.crossfade => 0,
   };
+
+  /// When the new network's neurons start appearing, relative to [start].
+  /// Before that the old network is all that's on screen.
+  double get spawnAt => switch (style) {
+    TransitionStyle.mitosis => 0.45,
+    TransitionStyle.collapse => 0.75,
+    TransitionStyle.unfold || TransitionStyle.crossfade => 0,
+  };
+
+  /// How long the outgoing static picture (captions, motif decorations)
+  /// takes to hand over to the dynamically drawn old network.
+  static const pictureHandover = 0.2;
 
   /// How long a new neuron takes to fly to its place.
   double get flight => style == TransitionStyle.collapse ? 0.5 : 0.65;

@@ -3,8 +3,8 @@ import 'dart:typed_data';
 
 /// Turns a monotonic training counter into training waves and "heat".
 ///
-/// - The first value and any decrease only set the baseline, so loading a
-///   save never fires a burst.
+/// - The first value, any decrease and any jump above [maxTapsPerUpdate]
+///   only set the baseline, so loading a save never fires a burst.
 /// - At most one wave starts every [minWaveGap] seconds (never more than 3
 ///   in any one-second window, safe for photosensitive viewers) and at most
 ///   [maxWaves] are alive. Extra taps boost the newest wave or just heat the
@@ -16,6 +16,9 @@ class TapTracker {
   static const waveLife = 1.0;
   static const _heatPerTap = 0.12, _heatTau = 0.8;
   static const _heatSlots = 32;
+
+  /// Larger counter jumps between two updates are treated as a loaded save.
+  static const maxTapsPerUpdate = 20;
 
   int? _baseline;
   int _serial = 0;
@@ -45,6 +48,9 @@ class TapTracker {
     _baseline = count;
     if (baseline == null || count <= baseline) return;
     final delta = count - baseline;
+    // A jump no human can tap between two updates is a restored or imported
+    // save, not training: just take it as the new baseline.
+    if (delta > maxTapsPerUpdate) return;
     if (delta > 3) {
       tap(t, heatOnly: heatOnly);
       for (var i = 1; i < math.min(delta, _heatSlots); i++) {

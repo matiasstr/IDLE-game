@@ -123,12 +123,15 @@ void main() {
       final slot = taps.waveStart.indexOf(1);
       expect(taps.waveAmp[slot], 1);
 
-      // Offline progress: a huge jump still fires a single wave.
+      // A jump no human can tap (a restored or imported save) only moves
+      // the baseline: no wave, no heat.
       final big = TapTracker()
         ..update(0, 0)
-        ..update(1, 1000000);
-      expect(big.aliveWaves(1), 1);
-      expect(big.heat(1), 1);
+        ..update(1, TapTracker.maxTapsPerUpdate + 1);
+      expect(big.aliveWaves(1), 0);
+      expect(big.heat(1), 0);
+      big.update(2, TapTracker.maxTapsPerUpdate + 2);
+      expect(big.aliveWaves(2), 1, reason: 'taps after the jump still count');
     });
   });
 

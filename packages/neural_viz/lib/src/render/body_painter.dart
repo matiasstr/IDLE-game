@@ -9,15 +9,25 @@ class BodyPainter {
   BodyPainter(NeuralVizTheme theme, {bool highContrast = false})
     : _fillColor = theme.surfaceRaised,
       _rimColor = theme.structure.withValues(alpha: 0.55),
-      _fill = Paint()..color = theme.surfaceRaised,
-      _rim = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = highContrast ? 1.75 : 1.25
-        ..color = theme.structure.withValues(alpha: 0.55);
+      _rimWidth = highContrast ? 1.75 : 1.25;
+
+  /// Opacity steps with a cached paint pair each: fading or back-of-ring
+  /// bodies reuse paints instead of allocating colors every frame.
+  static const _alphaSteps = 32;
 
   final Color _fillColor, _rimColor;
-  final Paint _fill, _rim;
+  final double _rimWidth;
+  final List<Paint?> _fills = List.filled(_alphaSteps + 1, null);
+  final List<Paint?> _rims = List.filled(_alphaSteps + 1, null);
   final Path _diamond = Path();
+
+  Paint _fillAt(int step) => _fills[step] ??= Paint()
+    ..color = _fillColor.withValues(alpha: _fillColor.a * step / _alphaSteps);
+
+  Paint _rimAt(int step) => _rims[step] ??= Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = _rimWidth
+    ..color = _rimColor.withValues(alpha: _rimColor.a * step / _alphaSteps);
 
   void paint(
     Canvas canvas,
@@ -27,14 +37,13 @@ class BodyPainter {
     int shape, [
     double alpha = 1,
   ]) {
-    if (alpha < 1) {
-      _fill.color = _fillColor.withValues(alpha: _fillColor.a * alpha);
-      _rim.color = _rimColor.withValues(alpha: _rimColor.a * alpha);
-    }
+    final step = (alpha.clamp(0.0, 1.0) * _alphaSteps).round();
+    if (step == 0) return;
+    final fill = _fillAt(step), rim = _rimAt(step);
     switch (NeuronShape.values[shape]) {
       case NeuronShape.circle:
-        canvas.drawCircle(Offset(x, y), r, _fill);
-        canvas.drawCircle(Offset(x, y), r, _rim);
+        canvas.drawCircle(Offset(x, y), r, fill);
+        canvas.drawCircle(Offset(x, y), r, rim);
       case NeuronShape.square:
         final rect = RRect.fromLTRBR(
           x - r,
@@ -43,8 +52,8 @@ class BodyPainter {
           y + r,
           Radius.circular(r * 0.5),
         );
-        canvas.drawRRect(rect, _fill);
-        canvas.drawRRect(rect, _rim);
+        canvas.drawRRect(rect, fill);
+        canvas.drawRRect(rect, rim);
       case NeuronShape.diamond:
         final d = r * 1.2;
         _diamond
@@ -54,12 +63,8 @@ class BodyPainter {
           ..lineTo(x, y + d)
           ..lineTo(x - d, y)
           ..close();
-        canvas.drawPath(_diamond, _fill);
-        canvas.drawPath(_diamond, _rim);
-    }
-    if (alpha < 1) {
-      _fill.color = _fillColor;
-      _rim.color = _rimColor;
+        canvas.drawPath(_diamond, fill);
+        canvas.drawPath(_diamond, rim);
     }
   }
 }

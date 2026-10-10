@@ -149,7 +149,11 @@ class _NeuralNetworkViewState extends State<NeuralNetworkView>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
+    // Moving the window to another monitor: both layers must re-record at
+    // the new pixel snapping, not only the dynamic one.
+    if (_inputsApplied && dpr != _devicePixelRatio) _scene.invalidateSettings();
+    _devicePixelRatio = dpr;
     final reduced = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final highContrast = MediaQuery.maybeHighContrastOf(context) ?? false;
     final theme = _resolveTheme();
@@ -159,6 +163,7 @@ class _NeuralNetworkViewState extends State<NeuralNetworkView>
       _inputsApplied = true;
       _scene.playIntro =
           widget.playIntro && widget.clock == null && !_reducedMotion;
+      _scene.animateTransitions = widget.clock is! FixedVizClock;
       _applyInputs();
     }
     _syncTicker();
@@ -211,10 +216,15 @@ class _NeuralNetworkViewState extends State<NeuralNetworkView>
     if (oldWidget.clock != widget.clock) {
       oldWidget.clock?.removeListener(_onClock);
       widget.clock?.addListener(_onClock);
+      // A frozen clock never advances, so it couldn't finish a transition.
+      _scene.animateTransitions = widget.clock is! FixedVizClock;
       if (widget.clock != null) _frame.t = _seconds(widget.clock!.value);
     }
     _applySettings(_resolveTheme(), _highContrast);
     _applyInputs();
+    // With an external clock, bring transition bookkeeping up to its time
+    // (a swapped clock may be past a running transition's end).
+    if (widget.clock != null) _scene.tick(_t);
     _syncTicker();
   }
 
@@ -283,6 +293,7 @@ class _NeuralNetworkViewState extends State<NeuralNetworkView>
       view = Semantics(
         button: true,
         label: widget.semanticLabel,
+        onTap: onTrain,
         child: FocusableActionDetector(
           mouseCursor: SystemMouseCursors.click,
           shortcuts: const {
