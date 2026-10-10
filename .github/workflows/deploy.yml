@@ -25,6 +25,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.7 # the SDK the project is developed and tested with
           cache: true
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

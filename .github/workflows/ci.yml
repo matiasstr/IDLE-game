@@ -22,6 +22,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.7 # the SDK the project is developed and tested with
           cache: true
       - name: Resolve app dependencies
         run: flutter pub get
@@ -50,6 +51,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.7 # the SDK the project is developed and tested with
           cache: true
       - name: Resolve engine dependencies
         run: dart pub get
@@ -71,6 +73,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.7 # the SDK the project is developed and tested with
           cache: true
       - name: Resolve visualization dependencies
         run: flutter pub get
