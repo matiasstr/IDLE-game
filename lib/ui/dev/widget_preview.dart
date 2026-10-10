@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:neural_idle/l10n/app_localizations.dart';
 import 'package:neural_idle/theme/app_colors.dart';
 import 'package:neural_idle/ui/widgets/buy_amount_selector.dart';
+import 'package:neural_idle/ui/widgets/coach_mark.dart';
 import 'package:neural_idle/ui/widgets/evolution_banner.dart';
 import 'package:neural_idle/ui/widgets/generator_card.dart';
 import 'package:neural_idle/ui/widgets/publish_paper_card.dart';
@@ -18,6 +19,24 @@ class WidgetPreview extends StatefulWidget {
 
 class _WidgetPreviewState extends State<WidgetPreview> {
   BuyAmount _buyAmount = BuyAmount.one;
+  final _coachTarget = GlobalKey();
+  VoidCallback? _closeCoach;
+
+  @override
+  void dispose() {
+    _closeCoach?.call();
+    super.dispose();
+  }
+
+  void _showTrainingHint() {
+    _closeCoach?.call();
+    _closeCoach = showCoachMark(
+      context,
+      target: _coachTarget,
+      message: AppLocalizations.of(context).hintTrain,
+      onDismiss: () => _closeCoach = null,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +66,13 @@ class _WidgetPreviewState extends State<WidgetPreview> {
             padding: const EdgeInsets.all(16),
             children: [
               Text(l10n.previewDescription),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                key: _coachTarget,
+                onPressed: _showTrainingHint,
+                icon: const Icon(Icons.touch_app_outlined),
+                label: Text(l10n.train),
+              ),
               const SizedBox(height: 24),
               Align(
                 alignment: Alignment.centerLeft,

@@ -1,4 +1,4 @@
-package com.matiasstr.neural_idle
+package io.github.matiasstr.neuralidle
 
 import io.flutter.embedding.android.FlutterActivity
 

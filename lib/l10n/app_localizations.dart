@@ -535,6 +535,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview evolution'**
   String get previewEvolution;
+
+  /// No description provided for @hintTrain.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Train model to earn your first tokens'**
+  String get hintTrain;
+
+  /// No description provided for @hintBuyHardware.
+  ///
+  /// In en, this message translates to:
+  /// **'Hardware trains for you: buy {name}'**
+  String hintBuyHardware(String name);
+
+  /// No description provided for @hintEvolve.
+  ///
+  /// In en, this message translates to:
+  /// **'At {tokens} tokens your network evolves into {architecture}'**
+  String hintEvolve(String tokens, String architecture);
+
+  /// No description provided for @hintResearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Research multiplies everything. Check the Research tab'**
+  String get hintResearch;
 }
 
 class _AppLocalizationsDelegate

@@ -148,5 +148,26 @@
   "widgetPreview": "Widget preview",
   "previewTitle": "Component preview",
   "previewDescription": "Demo data. These controls do not change your game.",
-  "previewEvolution": "Preview evolution"
+  "previewEvolution": "Preview evolution",
+  "hintTrain": "Tap Train model to earn your first tokens",
+  "hintBuyHardware": "Hardware trains for you: buy {name}",
+  "@hintBuyHardware": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "hintEvolve": "At {tokens} tokens your network evolves into {architecture}",
+  "@hintEvolve": {
+    "placeholders": {
+      "tokens": {
+        "type": "String"
+      },
+      "architecture": {
+        "type": "String"
+      }
+    }
+  },
+  "hintResearch": "Research multiplies everything. Check the Research tab"
 }

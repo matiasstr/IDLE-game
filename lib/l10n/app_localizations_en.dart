@@ -266,4 +266,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get previewEvolution => 'Preview evolution';
+
+  @override
+  String get hintTrain => 'Tap Train model to earn your first tokens';
+
+  @override
+  String hintBuyHardware(String name) {
+    return 'Hardware trains for you: buy $name';
+  }
+
+  @override
+  String hintEvolve(String tokens, String architecture) {
+    return 'At $tokens tokens your network evolves into $architecture';
+  }
+
+  @override
+  String get hintResearch =>
+      'Research multiplies everything. Check the Research tab';
 }
