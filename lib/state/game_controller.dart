@@ -29,8 +29,8 @@ final lossHistoryProvider = Provider<LossHistory>((ref) {
     try {
       final json = jsonDecode(raw);
       if (json is Map<String, Object?>) history = LossHistory.fromJson(json);
-    } on FormatException {
-      // Keep the fresh chart.
+    } on Object {
+      // Corrupt or out-of-range data: keep the fresh chart.
     }
   }
   ref.onDispose(history.dispose);

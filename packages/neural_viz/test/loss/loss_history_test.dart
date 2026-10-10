@@ -292,8 +292,26 @@ void main() {
     });
   });
 
+  group('fromJson rejects out-of-range data', () {
+    test('a huge capacity or a bogus samplesPerPoint is a FormatException', () {
+      final base = LossHistory(capacity: 16).toJson();
+      for (final patch in <Map<String, Object?>>[
+        {'capacity': 1 << 40},
+        {'samplesPerPoint': 1e300},
+        {'samplesPerPoint': 3},
+        {'samplesPerPoint': 1 << 30},
+      ]) {
+        expect(
+          () => LossHistory.fromJson({...base, ...patch}),
+          throwsFormatException,
+          reason: '$patch',
+        );
+      }
+    });
+  });
+
   group('notifications', () {
-    test('exactly one per committed point, none otherwise', () {
+    test('exactly one per accepted sample, none for marks', () {
       const capacity = 16;
       final h = LossHistory(capacity: capacity);
       var notified = 0;
@@ -319,11 +337,12 @@ void main() {
             spp *= 2;
           }
         }
-        expect(notified - before, commit ? 1 : 0, reason: 'sample $i');
+        expect(notified - before, 1, reason: 'sample $i');
         expect(h.length, length);
         expect(h.samplesPerPoint, spp);
       }
-      expect(notified, commits);
+      expect(commits, greaterThan(0));
+      expect(notified, 5000);
     });
 
     test('version changes on every accepted sample and mark', () {

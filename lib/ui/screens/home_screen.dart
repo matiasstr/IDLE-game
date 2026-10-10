@@ -41,6 +41,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     monoFontFamily: AppTextStyles.number().fontFamily ?? 'JetBrains Mono',
   );
 
+  /// Keep the network and loss chart alive when the layout switches between
+  /// its scrolling and non-scrolling forms (short windows, the soft
+  /// keyboard): a remount would replay the intro and drop a running
+  /// evolution.
+  final _networkKey = GlobalKey(debugLabel: 'network');
+  final _lossChartKey = GlobalKey(debugLabel: 'loss-chart');
+
   GameController get _controller => ref.read(gameControllerProvider.notifier);
 
   @override
@@ -125,6 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: SizedBox(
             height: 96,
             child: LossChart(
+              key: _lossChartKey,
               history: ref.watch(lossHistoryProvider),
               theme: _vizTheme,
               valueLabel: l10n.loss.toLowerCase(),
@@ -138,6 +146,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final visualization = ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: NeuralNetworkView(
+        key: _networkKey,
         topology: NetworkTopology.fromId(architecture.id, architecture.layers),
         nextTopology: next == null
             ? null

@@ -204,7 +204,7 @@ void main() {
       expect(tester.getSize(find.byType(LossChart)), const Size(320, 96));
     });
 
-    testWidgets('repaints only when the history commits a point', (
+    testWidgets('repaints on every sample, so the readout stays live', (
       tester,
     ) async {
       final h = LossHistory(capacity: 16);
@@ -217,8 +217,13 @@ void main() {
       );
       expect(tester.binding.hasScheduledFrame, isFalse);
 
-      h.add(0.5); // pending: no notification, no frame
-      expect(tester.binding.hasScheduledFrame, isFalse);
+      h.add(0.5); // pending, but the readout shows it
+      expect(tester.binding.hasScheduledFrame, isTrue);
+      await tester.pump();
+      expect(
+        tester.getSemantics(find.byType(LossChart)),
+        isSemantics(label: 'Training loss', value: '0.500'),
+      );
       h.mark('CNN');
       expect(tester.binding.hasScheduledFrame, isFalse);
 

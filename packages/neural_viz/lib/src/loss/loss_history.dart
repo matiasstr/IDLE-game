@@ -32,7 +32,7 @@ class LossHistory extends ChangeNotifier {
       throw FormatException('Unsupported LossHistory format $format');
     }
     final capacity = _readInt(json, 'capacity', 256);
-    if (capacity < 16 || capacity.isOdd) {
+    if (capacity < 16 || capacity > maxCapacity || capacity.isOdd) {
       throw FormatException('Invalid LossHistory capacity $capacity');
     }
     final noise = _readDouble(json, 'noise') ?? 0.04;
@@ -50,7 +50,10 @@ class LossHistory extends ChangeNotifier {
       .._samplesPerPoint = _readInt(json, 'samplesPerPoint', 1)
       .._first = _readPositive(json, 'first')
       .._latest = _readPositive(json, 'latest');
-    if (history._samplesPerPoint < 1) history._samplesPerPoint = 1;
+    final spp = history._samplesPerPoint;
+    if (spp < 1 || spp > 1 << 20 || spp & (spp - 1) != 0) {
+      throw FormatException('Invalid LossHistory samplesPerPoint $spp');
+    }
 
     final points = _readList(json, 'points');
     var folds = 0;
@@ -121,6 +124,10 @@ class LossHistory extends ChangeNotifier {
   /// Upper bound on [markers]; the oldest is dropped beyond it.
   static const int maxMarkers = 32;
 
+  /// Largest capacity accepted from JSON (keeps a corrupt save from
+  /// allocating gigabytes).
+  static const int maxCapacity = 4096;
+
   final Float64List _points;
   int _length = 0;
   int _samplesPerPoint = 1;
@@ -170,7 +177,8 @@ class LossHistory extends ChangeNotifier {
   /// NaN, ±infinity and values <= 0 are ignored. Samples are averaged into a
   /// pending point; when [capacity] points exist, pairs are averaged in
   /// place, marker indices are halved and [samplesPerPoint] doubles.
-  /// Notifies once per committed point.
+  /// Notifies on every sample, so the readout stays live even when many
+  /// samples are averaged into each point.
   void add(double loss) {
     if (!loss.isFinite || loss <= 0) return;
     _first ??= loss;
@@ -180,7 +188,10 @@ class LossHistory extends ChangeNotifier {
     _pendingSum += loss * (1 + noise * (2 * h - 1));
     _pendingCount++;
     _version++;
-    if (_pendingCount < _samplesPerPoint) return;
+    if (_pendingCount < _samplesPerPoint) {
+      notifyListeners();
+      return;
+    }
 
     final index = _length;
     _points[_length++] = _pendingSum / _pendingCount;
