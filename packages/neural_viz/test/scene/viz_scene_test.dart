@@ -85,7 +85,23 @@ double _distanceToSegment(
   return math.sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
 }
 
-int _ghosts(FrameBuffers f) => countSprites(f.glow, Sprites.dashRing);
+/// Centers of the dashed rings in [f].
+List<Offset> _dashRings(FrameBuffers f) {
+  final b = f.glow, cell = Sprites.dashRing;
+  return [
+    for (var i = 0; i < b.count; i++)
+      if (b.rects[i * 4] == cell.x * b.atlasScale &&
+          b.rects[i * 4 + 1] == cell.y * b.atlasScale)
+        Offset(
+          b.transforms[i * 4 + 2] +
+              b.transforms[i * 4] * (b.rects[i * 4 + 2] - b.rects[i * 4]) / 2,
+          b.transforms[i * 4 + 3] +
+              b.transforms[i * 4] *
+                  (b.rects[i * 4 + 3] - b.rects[i * 4 + 1]) /
+                  2,
+        ),
+  ];
+}
 
 void main() {
   group('evaluate is a pure function of inputs and time', () {
@@ -372,22 +388,61 @@ void main() {
   });
 
   group('progress effects', () {
-    test('ghosts appear where the next stage adds neurons', () {
-      for (var stage = 0; stage < 7; stage++) {
-        // (Motifs may draw dashed rings of their own: compare counts.)
-        final early = SceneDriver(stage, progress: 0.5);
-        final ghostsEarly = _ghosts(early.frameAt(3));
-        final d = SceneDriver(stage, progress: 1);
-        final added =
-            stageTopology(stage + 1).neuronCount -
-            stageTopology(stage).neuronCount;
-        expect(
-          _ghosts(d.frameAt(3)) - ghostsEarly,
-          inInclusiveRange(1, stageTopology(stage + 1).neuronCount),
-          reason: 'stage $stage (+$added neurons)',
-        );
-        d.dispose();
-        early.dispose();
+    test('ghosts extend the columns that grow, clear of everything', () {
+      for (final size in layoutSizes) {
+        var stagesWithGhosts = 0;
+        for (var stage = 0; stage < 7; stage++) {
+          // (Motifs may draw dashed rings of their own: compare frames.)
+          final early = SceneDriver(stage, progress: 0.5, size: size);
+          final d = SceneDriver(stage, progress: 1, size: size);
+          final before = _dashRings(early.frameAt(3));
+          final ghosts = [
+            for (final p in _dashRings(d.frameAt(3)))
+              if (!before.any((q) => (q - p).distance < 0.5)) p,
+          ];
+          final layout = d.scene.layout!;
+          final reason = 'stage $stage at $size';
+
+          // At most the neurons each column gains (layer l of the next
+          // stage continues the current layer it maps to).
+          final next = nextTopologyAfter(stage)!.layers;
+          final from = layout.layerCount;
+          var gained = 0, previous = -1;
+          for (var l = 0; l < next.length; l++) {
+            final o = (l * (from - 1) / (next.length - 1)).round();
+            if (o == previous) continue;
+            previous = o;
+            gained += math.max(0, next[l] - layout.layerSize(o));
+          }
+          expect(ghosts.length, lessThanOrEqualTo(gained), reason: reason);
+          if (ghosts.isNotEmpty) stagesWithGhosts++;
+
+          for (final g in ghosts) {
+            expect(
+              layout.layerX.any((x) => (x - g.dx).abs() < 0.5),
+              isTrue,
+              reason: '$reason: $g is not on a column',
+            );
+            expect(
+              layout.growRoom.deflate(layout.r).contains(g),
+              isTrue,
+              reason: '$reason: $g leaves ${layout.growRoom}',
+            );
+            for (var n = 0; n < layout.neuronCount; n++) {
+              final clear = layout.radius[n] + 1.3 * layout.r;
+              expect(
+                (g - Offset(layout.x[n], layout.y[n])).distance,
+                greaterThan(clear),
+                reason: '$reason: $g covers neuron $n',
+              );
+            }
+          }
+          d.dispose();
+          early.dispose();
+        }
+        // Only a stage whose growing columns are already full height (and
+        // captioned) may have nowhere to show its ghosts.
+        expect(stagesWithGhosts, greaterThanOrEqualTo(6), reason: '$size');
       }
     });
 

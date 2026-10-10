@@ -542,25 +542,65 @@ class VizScene {
     _ghostCount = 0;
     final next = _next;
     if (next == null || layout.isRings) return;
-    final ghost = NetworkLayout.build(
-      next,
-      _size,
-      devicePixelRatio: _dpr,
-      showCaptions: showCaptions,
-    );
-    for (var g = 0; g < ghost.neuronCount; g++) {
-      var free = true;
-      for (var n = 0; n < layout.neuronCount && free; n++) {
-        final dx = ghost.x[g] - layout.x[n], dy = ghost.y[g] - layout.y[n];
-        if (dx * dx + dy * dy < 4 * layout.r * layout.r) free = false;
-      }
-      if (free && _ghostCount < FrameBuffers.maxNeurons) {
-        _ghostX[_ghostCount] = ghost.x[g];
-        _ghostY[_ghostCount] = ghost.y[g];
-        _ghostR[_ghostCount] = ghost.radius[g];
-        _ghostCount++;
+    // Each layer (or ring) of the next stage continues the current layer it
+    // grows out of (the evolution's own mapping); the neurons it adds show
+    // as dashed ones extending that column, alternately below and above.
+    // Brand-new columns get no ghosts: there is no honest place for them.
+    final from = layout.layerCount, to = next.layers.length;
+    var previous = -1;
+    for (var l = 0; l < to; l++) {
+      final o = to == 1 ? 0 : (l * (from - 1) / (to - 1)).round();
+      if (o == previous) continue;
+      previous = o;
+      final extra = next.layers[l] - layout.layerSize(o);
+      if (extra <= 0) continue;
+      var top = layout.layerStart[o], bottom = layout.layerStart[o + 1] - 1;
+      if (layout.y[top] > layout.y[bottom]) (top, bottom) = (bottom, top);
+      final pitch = bottom != top
+          ? (layout.y[bottom] - layout.y[top]) / (bottom - top)
+          : layout.pitch;
+      final r = layout.r;
+      for (var k = 0; k < extra; k++) {
+        final end = k.isEven ? bottom : top;
+        final step = k ~/ 2;
+        final offset =
+            math.max(pitch, layout.radius[end] + 1.3 * r + 4) + step * pitch;
+        _addGhost(
+          layout,
+          layout.layerX[o],
+          layout.y[end] + (k.isEven ? offset : -offset),
+          r,
+        );
       }
     }
+  }
+
+  /// Adds a ghost unless it would cover a neuron or another ghost, or leave
+  /// the room the network may grow into.
+  void _addGhost(NetworkLayout layout, double x, double y, double r) {
+    if (_ghostCount >= FrameBuffers.maxNeurons) return;
+    final reach = 1.3 * r; // the dashed ring's outer edge
+    final room = layout.growRoom;
+    if (x - reach < room.left ||
+        y - reach < room.top ||
+        x + reach > room.right ||
+        y + reach > room.bottom) {
+      return;
+    }
+    for (var n = 0; n < layout.neuronCount; n++) {
+      final dx = x - layout.x[n], dy = y - layout.y[n];
+      final clear = layout.radius[n] + reach + 3;
+      if (dx * dx + dy * dy < clear * clear) return;
+    }
+    for (var g = 0; g < _ghostCount; g++) {
+      final dx = x - _ghostX[g], dy = y - _ghostY[g];
+      final clear = 1.3 * _ghostR[g] + reach + 3;
+      if (dx * dx + dy * dy < clear * clear) return;
+    }
+    _ghostX[_ghostCount] = x;
+    _ghostY[_ghostCount] = y;
+    _ghostR[_ghostCount] = r;
+    _ghostCount++;
   }
 
   // ============================================================== evaluate
@@ -1154,21 +1194,20 @@ class VizScene {
     final gap = front.floor();
     final f = front - gap;
     final hue = backward ? LineHue.structure : LineHue.signal;
-    final lo = backward ? f : math.max(0.0, f - 0.18);
-    final hi = backward ? math.min(1.0, f + 0.18) : f;
-    if (hi <= lo) return;
+    final seed = layout.topology.seed;
     if (layout.isRings) {
       final ring = gap - 1; // gap k + 1 links ring k to ring k + 1
       for (var k = 0; k < _ringEdges; k++) {
         final s = _ringSrc[k];
         if (layout.layerOf[s] != ring) continue;
-        _flare(
+        _waveCrest(
+          seed,
           s,
           _ringDst[k],
-          lo,
-          hi,
+          f,
           hue,
           amp * _ringStrength[k] * _ringFactor[k],
+          backward: backward,
         );
       }
       return;
@@ -1178,13 +1217,50 @@ class VizScene {
     for (var src = from; src < to; src++) {
       for (var i = layout.outStart[src]; i < layout.outStart[src + 1]; i++) {
         final edge = layout.outEdges[i];
-        _flare(src, layout.edgeDst[edge], lo, hi, hue, amp * _strength[edge]);
+        _waveCrest(
+          seed,
+          src,
+          layout.edgeDst[edge],
+          f,
+          hue,
+          amp * _strength[edge],
+          backward: backward,
+        );
       }
     }
   }
 
-  void _flare(int s, int d, double lo, double hi, LineHue hue, double alpha) {
+  /// Fraction of an edge a wave lights, the bright head part of it, and how
+  /// far each edge's crest runs ahead of or behind the others.
+  static const _waveLength = 0.18, _waveHead = 0.07, _waveJitter = 0.08;
+
+  /// One edge's part of a wave at fraction [f] along the gap: a bright head
+  /// with a dimmer tail behind it. The per-edge offset keeps a dense layer
+  /// from lighting up as one hard-edged band.
+  void _waveCrest(
+    int seed,
+    int s,
+    int d,
+    double f,
+    LineHue hue,
+    double alpha, {
+    required bool backward,
+  }) {
     if (alpha < 0.03) return;
+    final crest = f + _waveJitter * (hash01(seed, 0x3a7e + s, d) - 0.5);
+    final behind = backward ? 1.0 : -1.0;
+    final head = crest + behind * _waveHead;
+    _flare(s, d, crest, head, hue, alpha);
+    _flare(s, d, head, crest + behind * _waveLength, hue, 0.4 * alpha);
+  }
+
+  /// Lights edge [s]→[d] between fractions [a] and [b] (either order,
+  /// clipped to the edge).
+  void _flare(int s, int d, double a, double b, LineHue hue, double alpha) {
+    if (alpha < 0.03) return;
+    final lo = math.max(0.0, math.min(a, b));
+    final hi = math.min(1.0, math.max(a, b));
+    if (hi <= lo) return;
     final dx = _x[d] - _x[s], dy = _y[d] - _y[s];
     frame
         .litBucket(hue, alpha)

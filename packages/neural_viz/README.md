@@ -12,7 +12,8 @@ about the game engine: the app maps engine state to a few plain inputs.
   lanes fused) and AGI (counter-rotating rings that rewire themselves).
 - **Driven by the game**: production sets signal count, speed and glow; each
   manual training plays a forward and a backward pass; accuracy sets weight
-  contrast; progress shows ghosts of the next stage.
+  contrast; near the next stage, dashed ghosts extend the columns that
+  will grow.
 - **Transitions**: evolution (one sequence even for multi-stage jumps), a
   collapse when a paper is published, and a crossfade for same-stage changes.
 - **Deterministic**: a frame is a pure function of the input history and
@@ -76,7 +77,11 @@ reset the baseline, so loading a save never fires a burst of passes. A higher
 `stage` plays an evolution, a lower one a reset, the same one a crossfade.
 
 ```dart
-LossChart(history: lossHistory, semanticLabel: 'Training loss')
+LossChart(
+  history: lossHistory,
+  semanticLabel: 'Training loss',
+  decimalSeparator: ',', // optional, for locales like Spanish
+)
 ```
 
 Persist the chart with `lossHistory.toJson()` and `LossHistory.fromJson`

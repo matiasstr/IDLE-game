@@ -237,7 +237,10 @@ abstract final class StaticRecorder {
       final text = layout.captions[l];
       if (text.isEmpty) continue;
       final painter = TextPainter(
-        text: TextSpan(text: text.toUpperCase(), style: style),
+        text: TextSpan(
+          text: isWordCaption(text) ? text.toUpperCase() : text,
+          style: style,
+        ),
         textDirection: TextDirection.ltr,
         maxLines: 1,
       )..layout();

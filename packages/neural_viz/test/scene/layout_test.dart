@@ -165,11 +165,35 @@ void main() {
     test('have the documented counts', () {
       expect(edges(NetworkKind.perceptron.index, wide), 3);
       expect(edges(NetworkKind.mlp.index, wide), 25);
-      expect(edges(NetworkKind.cnn.index, wide), 56);
+      expect(edges(NetworkKind.cnn.index, wide), 60);
       expect(edges(NetworkKind.rnn.index, wide), 105);
       expect(edges(NetworkKind.transformer.index, wide), 224);
       expect(edges(NetworkKind.llm.index, wide), 360);
       expect(edges(NetworkKind.agi.index, wide), 0); // rewired every frame
+    });
+
+    test('every CNN conv and pool unit sees a full window of 3', () {
+      for (final size in [wide, narrow]) {
+        final l = NetworkLayout.build(
+          stageTopology(NetworkKind.cnn.index),
+          size,
+        );
+        final fanIn = List.filled(l.neuronCount, 0);
+        for (var e = 0; e < l.edgeCount; e++) {
+          fanIn[l.edgeDst[e]]++;
+        }
+        for (var layer = 1; layer <= 2; layer++) {
+          for (var n = l.layerStart[layer]; n < l.layerStart[layer + 1]; n++) {
+            expect(fanIn[n], 3, reason: 'layer $layer unit $n at $size');
+          }
+        }
+      }
+      for (final (src, dst) in [(6, 8), (8, 6), (5, 3), (3, 7), (2, 4)]) {
+        for (var j = 0; j < dst; j++) {
+          final c = cnnWindowCenter(j, src, dst);
+          expect(c, inInclusiveRange(src >= 3 ? 1 : 0, src >= 3 ? src - 2 : 1));
+        }
+      }
     });
 
     test('dense stages keep the full fan-in from 480 px up', () {
@@ -465,5 +489,14 @@ void main() {
         }
       }
     });
+  });
+
+  test('word captions are set in capitals, notation is kept', () {
+    for (final word in ['in', 'hidden', 'fc', 'attn', 'blocks ×96']) {
+      expect(isWordCaption(word), isTrue, reason: word);
+    }
+    for (final notation in ['x', 'ŷ', 'x(t)', 'h(t)', 'y(t)', '']) {
+      expect(isWordCaption(notation), isFalse, reason: notation);
+    }
   });
 }

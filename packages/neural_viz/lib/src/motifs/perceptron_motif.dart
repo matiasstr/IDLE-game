@@ -217,7 +217,7 @@ class PerceptronMotif extends Motif {
         text: '+1',
         style: TextStyle(
           fontFamily: theme.monoFontFamily,
-          fontSize: br >= 8 ? 8 : 7,
+          fontSize: (0.85 * br).clamp(7.0, 11.0),
           fontWeight: FontWeight.w500,
           color: theme.textSecondary.withValues(alpha: 0.9),
         ),
@@ -256,10 +256,12 @@ class PerceptronMotif extends Motif {
     final theme = ctx.theme;
     final style = TextStyle(
       fontFamily: theme.monoFontFamily,
-      fontSize: 8.5,
+      // Sized with the network, and never below 9 px: this is the first
+      // thing a new player reads.
+      fontSize: (0.75 * layout.r).clamp(9.0, 12.0),
       fontWeight: FontWeight.w500,
       letterSpacing: 0.4,
-      color: ctx.highContrast ? theme.textSecondary : theme.textMuted,
+      color: ctx.highContrast ? theme.textPrimary : theme.textSecondary,
     );
     for (var e = 0; e < layout.edgeCount; e++) {
       final a = layout.edgeSrc[e], b = layout.edgeDst[e];

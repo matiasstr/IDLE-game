@@ -119,8 +119,7 @@ class CnnMotif extends Motif {
   }
 
   /// Center (source index) of target [j]'s receptive field.
-  static int _center(int j, int src, int dst) =>
-      dst <= 1 ? (src - 1) ~/ 2 : (j * (src - 1) / (dst - 1)).round();
+  static int _center(int j, int src, int dst) => cnnWindowCenter(j, src, dst);
 
   /// Vertical position of fractional source index [f] in layer [l].
   static double _yAt(FrameContext ctx, int l, double f) {

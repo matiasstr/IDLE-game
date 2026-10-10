@@ -28,6 +28,7 @@ class NetworkLayout {
     required this.topology,
     required this.size,
     required this.content,
+    required this.growRoom,
     required this.layerStart,
     required this.layerX,
     required this.x,
@@ -64,6 +65,10 @@ class NetworkLayout {
 
   /// Area the network occupies, after insets and motif margins.
   final Rect content;
+
+  /// Where the network could grow into without touching its motif's
+  /// decorations or the captions (the next stage's ghosts go there).
+  final Rect growRoom;
 
   /// Index of the first neuron of each layer; the last entry is the count.
   final Int32List layerStart;
@@ -355,6 +360,23 @@ class _LayoutBuilder {
       captionY = snap(math.min(lowest + 10, h - 8));
     }
 
+    // The view minus the bands motifs decorate (RNN echoes, LLM tokens and
+    // logits, transformer arcs, CNN and multimodal inputs) and the captions.
+    final growRoom = Rect.fromLTRB(
+      switch (kind) {
+        NetworkKind.rnn ||
+        NetworkKind.cnn ||
+        NetworkKind.multimodal => content.left,
+        _ => 4,
+      },
+      kind == NetworkKind.rnn || kind == NetworkKind.llm ? content.top : 4,
+      kind == NetworkKind.llm ? content.right : w - 4,
+      math.min(
+        kind == NetworkKind.transformer ? content.bottom : h - 4,
+        captions.isEmpty ? h - 4 : captionY - 4,
+      ),
+    );
+
     final edges = _edges(layerStart, w);
     final edgeCount = edges.src.length;
     final outStart = Int32List(count + 1);
@@ -392,6 +414,7 @@ class _LayoutBuilder {
       r: r,
       captions: captions,
       captionY: captionY,
+      growRoom: growRoom,
       groupOf: groupOf,
       ringRadius: ringRadius,
       ringAngle: ringAngle,
@@ -478,8 +501,7 @@ class _LayoutBuilder {
   bool _connected(int pair, int i, int j, int srcN, int dstN) {
     if (kind == NetworkKind.cnn && pair < 2 && dstN > 1) {
       // Local receptive field: a window of 3 around the matching source.
-      final center = (j * (srcN - 1) / (dstN - 1)).round();
-      return (i - center).abs() <= 1;
+      return (i - cnnWindowCenter(j, srcN, dstN)).abs() <= 1;
     }
     if (kind == NetworkKind.multimodal && pair == 0 && srcN >= 3 && dstN >= 3) {
       // Encoders stay inside their modality lane until the fusion layer.
@@ -554,3 +576,17 @@ class _Edges {
     highway.add(0);
   }
 }
+
+/// Source row that CNN unit [j] (of [dst]) centres its 3-row receptive
+/// field on, among [src] rows. Kept one row inside the column, so the
+/// window (and the kernel bracket drawn over it) never reaches past it.
+int cnnWindowCenter(int j, int src, int dst) {
+  if (dst <= 1) return (src - 1) ~/ 2;
+  final center = (j * (src - 1) / (dst - 1)).round();
+  return src >= 3 ? center.clamp(1, src - 2) : center;
+}
+
+/// Whether [caption] is a word to set in small caps ("hidden", "blocks
+/// ×96") rather than notation to keep as written ("x", "ŷ", "h(t)").
+bool isWordCaption(String caption) =>
+    RegExp(r'^[a-z]{2,}( ×\d+)?$').hasMatch(caption);
