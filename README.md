@@ -13,8 +13,8 @@ code builds for Android and iOS), in English and Spanish.
 ## The game
 
 - **Train** by tapping, and buy **hardware** (10 tiers, from an old laptop
-  to a Dyson swarm) and **research** (21 upgrades) to produce tokens on
-  their own.
+  to a Dyson swarm, one, ten or as many as you can afford at a time) and
+  **research** (21 upgrades) to produce tokens on their own.
 - **Evolve** through 8 architectures: Perceptron, MLP, CNN, RNN,
   Transformer, LLM, Multimodal and AGI. Each one is a different network on
   screen, and you can watch it evolve.
@@ -22,6 +22,8 @@ code builds for Android and iOS), in English and Spanish.
   boost production.
 - **Offline progress**: your AI keeps training while you're away (up to
   8 hours), including when the tab is hidden or the device sleeps.
+- **First-run hints** point at what to do next, and a **Stats** tab keeps
+  your lifetime numbers. Saves can be exported and imported.
 
 <p align="center">
   <img src="docs/media/desktop.webp" width="720" alt="Desktop layout: resources and the loss chart, the network, and the hardware shop">
