@@ -77,4 +77,15 @@ void main() {
     await prefs.setStringList(OnboardingController.key, ['nope', 'evolve']);
     expect(create().read(onboardingProvider), {OnboardingStep.evolve});
   });
+
+  test('the hardware hint counts the units a tap would buy', () {
+    const twelve = GameState(
+      tokens: 12,
+      runTokens: 12,
+      lifetimeTokens: 12,
+      manualTrainings: 12,
+    );
+    expect(step(twelve), OnboardingStep.buyHardware);
+    expect(onboardingStep(engine, twelve, const {}, buyQuantity: 10), isNull);
+  });
 }

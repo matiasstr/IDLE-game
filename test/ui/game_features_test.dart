@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -134,7 +135,10 @@ void main() {
       expect(find.byType(OfflineProgressDialog), findsOneWidget);
       expect(find.byType(CoachMark), findsNothing);
       await tester.tap(find.text('Collect tokens'));
-      await settle(tester);
+      // The hint waits for the dialog to finish closing first.
+      await settle(tester, 2);
+      expect(find.byType(CoachMark), findsNothing);
+      await settle(tester, 8);
       // Hardware is running and the MLP is still ahead.
       expect(find.byType(CoachMark), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
@@ -281,5 +285,144 @@ void main() {
     expect(find.byType(OfflineProgressDialog), findsOneWidget);
     expect(find.textContaining('Your model evolved'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  group('review regressions', () {
+    testWidgets('a hint on screen follows a language switch', (tester) async {
+      await pumpGame(tester, dismissed: const {});
+      expect(
+        find.text('Tap Train model to earn your first tokens'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('ES'));
+      await settle(tester, 8);
+      expect(
+        find.text('Tocá Entrenar modelo para ganar tus primeros tokens'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('on phones the first hint sits above the train button, '
+        'off the store tabs', (tester) async {
+      await pumpGame(tester, size: const Size(390, 844), dismissed: const {});
+      final hint = tester.getRect(find.byType(CoachMark));
+      final button = tester.getRect(find.byKey(const ValueKey('train-button')));
+      expect(hint.bottom, lessThanOrEqualTo(button.top));
+      expect(find.text('Research').hitTestable(), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('the hardware hint waits until the selected amount is '
+        'affordable', (tester) async {
+      await pumpGame(
+        tester,
+        dismissed: const {OnboardingStep.train},
+        game: const GameState(
+          tokens: 12,
+          runTokens: 12,
+          lifetimeTokens: 12,
+          manualTrainings: 12,
+        ),
+      );
+      expect(find.byType(CoachMark), findsOneWidget);
+      await tester.tap(find.text('×10'));
+      await settle(tester, 8);
+      expect(find.byType(CoachMark), findsNothing, reason: '10 cost 160+');
+      await tester.tap(find.text('×1'));
+      await settle(tester, 8);
+      expect(find.byType(CoachMark), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    for (final (size, scale) in [
+      (const Size(360, 640), 1.0),
+      (const Size(360, 640), 1.5),
+      (const Size(800, 560), 1.0),
+    ]) {
+      testWidgets('the hardware list stays usable at $size, text ×$scale', (
+        tester,
+      ) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await pumpGame(tester, size: size, game: const GameState(tokens: 50));
+        expect(tester.takeException(), isNull);
+        // The first hardware card can be scrolled to and bought.
+        await tester.dragUntilVisible(
+          find.byKey(const ValueKey('hardware-laptop')),
+          find.byType(Scrollable).first,
+          const Offset(0, -120),
+        );
+        await settle(tester, 2);
+        expect(
+          find.byKey(const ValueKey('hardware-laptop')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
+
+    testWidgets('importing a save does not throw a banner over the sheet', (
+      tester,
+    ) async {
+      await pumpGame(tester, size: const Size(390, 844));
+      await tester.tap(find.byKey(const ValueKey('settings-button')));
+      await settle(tester, 6);
+      await tester.ensureVisible(find.text('Import save'));
+      await tester.tap(find.text('Import save'));
+      await settle(tester, 4);
+      await tester.enterText(
+        find.byType(TextField),
+        const SaveCodec().encode(
+          const GameState(runTokens: 3e9, lifetimeTokens: 3e9),
+          savedAt: DateTime.now(),
+        ),
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Import save'));
+      await settle(tester, 25);
+      expect(find.byType(EvolutionBanner), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('copying from Settings says so where it can be seen', (
+      tester,
+    ) async {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await pumpGame(tester, size: const Size(360, 640));
+      await tester.tap(find.byKey(const ValueKey('settings-button')));
+      await settle(tester, 6);
+      await tester.ensureVisible(find.text('Source code'));
+      await tester.tap(find.text('Source code'));
+      await settle(tester, 2);
+      expect(find.text('Copied').hitTestable(), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('after a paper the locked card is about the next one', (
+      tester,
+    ) async {
+      await pumpGame(
+        tester,
+        game: const GameState(papersPublished: 2, citations: 30),
+      );
+      await tester.tap(find.text('Stats'));
+      await settle(tester, 8);
+      expect(
+        find.text('Reach the Transformer again to publish your next paper'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('first paper'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
   });
 }

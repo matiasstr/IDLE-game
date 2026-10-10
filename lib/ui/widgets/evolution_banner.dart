@@ -51,12 +51,19 @@ class EvolutionBanner extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
               const SizedBox(height: 8),
-              Text(
-                architecture,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.number(
-                  size: 24,
-                  color: AppColors.neonViolet,
+              // One line, shrunk if needed: "Transformer" must not break
+              // mid-word at large text sizes.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  architecture,
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.number(
+                    size: 24,
+                    color: AppColors.neonViolet,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),

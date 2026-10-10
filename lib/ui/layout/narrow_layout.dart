@@ -20,8 +20,10 @@ class NarrowLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      // Short windows scroll as a whole; ordinary phone sizes retain a pinned shop.
-      final shortWindow = constraints.maxHeight < 560;
+      // Short windows scroll as a whole; tall phones keep a pinned shop.
+      // Below 720 px a pinned shop would get only a sliver of height
+      // (under 100 px on a 360×640 phone).
+      final shortWindow = constraints.maxHeight < 720;
       final content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -131,7 +131,7 @@
       }
     }
   },
-  "hintEvolve": "Con {tokens} tokens tu red evoluciona a {architecture}",
+  "hintEvolve": "Ganá {tokens} tokens en esta partida y tu red evoluciona a {architecture}",
   "@hintEvolve": {
     "placeholders": {
       "tokens": {
@@ -142,5 +142,7 @@
       }
     }
   },
-  "hintResearch": "La investigación multiplica todo. Mirá la pestaña Investigación"
+  "hintResearch": "La investigación multiplica todo. Mirá la pestaña Investigación",
+  "publishLockedNext": "Volvé a llegar a {architecture} para publicar tu próximo paper",
+  "buyMaxShort": "MÁX"
 }

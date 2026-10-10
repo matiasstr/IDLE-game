@@ -158,7 +158,7 @@
       }
     }
   },
-  "hintEvolve": "At {tokens} tokens your network evolves into {architecture}",
+  "hintEvolve": "Earn {tokens} tokens this run and your network evolves into {architecture}",
   "@hintEvolve": {
     "placeholders": {
       "tokens": {
@@ -169,5 +169,17 @@
       }
     }
   },
-  "hintResearch": "Research multiplies everything. Check the Research tab"
+  "hintResearch": "Research multiplies everything. Check the Research tab",
+  "publishLockedNext": "Reach the {architecture} again to publish your next paper",
+  "@publishLockedNext": {
+    "placeholders": {
+      "architecture": {
+        "type": "String"
+      }
+    }
+  },
+  "buyMaxShort": "MAX",
+  "@buyMaxShort": {
+    "description": "Short label of the buy-max segment"
+  }
 }

@@ -279,10 +279,18 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String hintEvolve(String tokens, String architecture) {
-    return 'Con $tokens tokens tu red evoluciona a $architecture';
+    return 'Ganá $tokens tokens en esta partida y tu red evoluciona a $architecture';
   }
 
   @override
   String get hintResearch =>
       'La investigación multiplica todo. Mirá la pestaña Investigación';
+
+  @override
+  String publishLockedNext(String architecture) {
+    return 'Volvé a llegar a $architecture para publicar tu próximo paper';
+  }
+
+  @override
+  String get buyMaxShort => 'MÁX';
 }

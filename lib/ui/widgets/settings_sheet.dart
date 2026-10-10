@@ -114,10 +114,10 @@ class SettingsSheet extends ConsumerWidget {
                 _sourceUrl,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              _SettingsAction(
+              _CopyAction(
                 icon: Icons.code_rounded,
                 label: l10n.sourceCode,
-                onTap: () => _copy(context, _sourceUrl),
+                text: _sourceUrl,
               ),
             ],
             if (kDebugMode) ...[
@@ -209,51 +209,153 @@ Future<void> _reset(BuildContext context, VoidCallback onReset) async {
   if (confirmed == true && context.mounted) onReset();
 }
 
-Future<void> _copy(BuildContext context, String text) async {
-  final l10n = AppLocalizations.of(context);
+/// Copies [text] to the clipboard. False if the platform refused.
+Future<bool> _copyToClipboard(String text) async {
   try {
     await Clipboard.setData(ClipboardData(text: text));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.copied)));
+    return true;
+  } on Object {
+    return false;
+  }
+}
+
+/// How a copy went, shown where it was asked for: a SnackBar would appear
+/// under this modal sheet, out of sight.
+enum _CopyState { idle, copied, failed }
+
+/// A settings row that copies [text] and reports the result in place.
+class _CopyAction extends StatefulWidget {
+  const _CopyAction({
+    required this.icon,
+    required this.label,
+    required this.text,
+  });
+  final IconData icon;
+  final String label;
+  final String text;
+
+  @override
+  State<_CopyAction> createState() => _CopyActionState();
+}
+
+class _CopyActionState extends State<_CopyAction> {
+  var _state = _CopyState.idle;
+
+  Future<void> _copy() async {
+    final copied = await _copyToClipboard(widget.text);
+    if (mounted) {
+      setState(() => _state = copied ? _CopyState.copied : _CopyState.failed);
     }
-  } catch (_) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.copyFailed)));
-    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      minVerticalPadding: 12,
+      leading: Icon(widget.icon, color: AppColors.textSecondary),
+      title: Text(widget.label),
+      subtitle: switch (_state) {
+        _CopyState.idle => null,
+        _CopyState.copied => Text(
+          l10n.copied,
+          style: const TextStyle(color: AppColors.neonLime),
+        ),
+        _CopyState.failed => Text(
+          l10n.copyFailed,
+          style: const TextStyle(color: AppColors.error),
+        ),
+      },
+      onTap: _copy,
+    );
   }
 }
 
 void _export(BuildContext context, String Function() exportSave) {
   final l10n = AppLocalizations.of(context);
-  late final String raw;
+  String? raw;
   try {
     raw = exportSave();
-  } catch (_) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(l10n.exportFailed)));
-    return;
+  } on Object {
+    raw = null;
   }
+  final save = raw;
   showDialog<void>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (_) => save == null
+        ? AlertDialog(
+            title: Text(l10n.exportSave),
+            content: Text(l10n.exportFailed),
+            actions: [
+              Builder(
+                builder: (dialogContext) => TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(l10n.close),
+                ),
+              ),
+            ],
+          )
+        : _ExportDialog(save: save),
+  );
+}
+
+/// The exported save, selectable, with a copy button that says how it went.
+class _ExportDialog extends StatefulWidget {
+  const _ExportDialog({required this.save});
+  final String save;
+
+  @override
+  State<_ExportDialog> createState() => _ExportDialogState();
+}
+
+class _ExportDialogState extends State<_ExportDialog> {
+  var _state = _CopyState.idle;
+
+  Future<void> _copy() async {
+    final copied = await _copyToClipboard(widget.save);
+    if (mounted) {
+      setState(() => _state = copied ? _CopyState.copied : _CopyState.failed);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
       scrollable: true,
       title: Text(l10n.exportSave),
-      content: SelectableText(raw),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(widget.save),
+          if (_state == _CopyState.failed) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.copyFailed,
+              style: const TextStyle(color: AppColors.error),
+            ),
+          ],
+        ],
+      ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
+          onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.close),
         ),
         FilledButton.icon(
-          onPressed: () => _copy(dialogContext, raw),
-          icon: const Icon(Icons.copy_rounded),
-          label: Text(l10n.copy),
+          onPressed: _copy,
+          icon: Icon(
+            _state == _CopyState.copied
+                ? Icons.check_rounded
+                : Icons.copy_rounded,
+          ),
+          label: Text(_state == _CopyState.copied ? l10n.copied : l10n.copy),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 class _ImportSaveDialog extends StatefulWidget {

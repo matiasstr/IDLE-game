@@ -32,7 +32,7 @@ class BuyAmountSelector extends StatelessWidget {
           ),
           ButtonSegment(
             value: BuyAmount.max,
-            label: const Text('MAX'),
+            label: Text(l10n.buyMaxShort),
             tooltip: l10n.buyMax,
           ),
         ],

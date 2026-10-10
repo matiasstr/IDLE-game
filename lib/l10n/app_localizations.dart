@@ -551,7 +551,7 @@ abstract class AppLocalizations {
   /// No description provided for @hintEvolve.
   ///
   /// In en, this message translates to:
-  /// **'At {tokens} tokens your network evolves into {architecture}'**
+  /// **'Earn {tokens} tokens this run and your network evolves into {architecture}'**
   String hintEvolve(String tokens, String architecture);
 
   /// No description provided for @hintResearch.
@@ -559,6 +559,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Research multiplies everything. Check the Research tab'**
   String get hintResearch;
+
+  /// No description provided for @publishLockedNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Reach the {architecture} again to publish your next paper'**
+  String publishLockedNext(String architecture);
+
+  /// Short label of the buy-max segment
+  ///
+  /// In en, this message translates to:
+  /// **'MAX'**
+  String get buyMaxShort;
 }
 
 class _AppLocalizationsDelegate

@@ -28,6 +28,13 @@ class _WidgetPreviewState extends State<WidgetPreview> {
     super.dispose();
   }
 
+  /// The hint doesn't follow a scrolling target, and must not sit on top
+  /// of the sheets and dialogs this page opens.
+  void _hideHint() {
+    _closeCoach?.call();
+    _closeCoach = null;
+  }
+
   void _showTrainingHint() {
     _closeCoach?.call();
     _closeCoach = showCoachMark(
@@ -62,103 +69,115 @@ class _WidgetPreviewState extends State<WidgetPreview> {
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(l10n.previewDescription),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                key: _coachTarget,
-                onPressed: _showTrainingHint,
-                icon: const Icon(Icons.touch_app_outlined),
-                label: Text(l10n.train),
-              ),
-              const SizedBox(height: 24),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: BuyAmountSelector(
-                  value: _buyAmount,
-                  onChanged: (value) => setState(() => _buyAmount = value),
+          child: NotificationListener<ScrollStartNotification>(
+            onNotification: (_) {
+              _hideHint();
+              return false;
+            },
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text(l10n.previewDescription),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  key: _coachTarget,
+                  onPressed: _showTrainingHint,
+                  icon: const Icon(Icons.touch_app_outlined),
+                  label: Text(l10n.train),
                 ),
-              ),
-              const SizedBox(height: 16),
-              GeneratorCard(
-                icon: Icons.memory_rounded,
-                name: 'Gaming GPU',
-                description: '+4/s',
-                owned: 6,
-                cost: '254',
-                production: '+4/s',
-                quantityLabel: switch (_buyAmount) {
-                  BuyAmount.one => '×1',
-                  BuyAmount.ten => '×10',
-                  BuyAmount.max => 'MAX',
-                },
-                canAfford: true,
-                onBuy: () {},
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                height: 220,
-                child: StoreTabs(
-                  hardware: const Center(child: Text('Gaming GPU · 254')),
-                  research: const Center(child: Text('Mini-batches · 2.5K')),
-                  stats: SingleChildScrollView(child: stats),
-                  researchBadge: 3,
+                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: BuyAmountSelector(
+                    value: _buyAmount,
+                    onChanged: (value) => setState(() => _buyAmount = value),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              const EvolutionBanner(
-                architecture: 'CNN',
-                description: 'Convolutional Neural Network',
-                stage: 3,
-                totalStages: 8,
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () => showEvolutionBanner(
-                  context,
+                const SizedBox(height: 16),
+                GeneratorCard(
+                  icon: Icons.memory_rounded,
+                  name: 'Gaming GPU',
+                  description: '+4/s',
+                  owned: 6,
+                  cost: '254',
+                  production: '+4/s',
+                  quantityLabel: switch (_buyAmount) {
+                    BuyAmount.one => '×1',
+                    BuyAmount.ten => '×10',
+                    BuyAmount.max => 'MAX',
+                  },
+                  canAfford: true,
+                  onBuy: () {},
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  height: 220,
+                  child: StoreTabs(
+                    hardware: const Center(child: Text('Gaming GPU · 254')),
+                    research: const Center(child: Text('Mini-batches · 2.5K')),
+                    stats: SingleChildScrollView(child: stats),
+                    researchBadge: 3,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const EvolutionBanner(
                   architecture: 'CNN',
                   description: 'Convolutional Neural Network',
                   stage: 3,
                   totalStages: 8,
                 ),
-                child: Text(l10n.previewEvolution),
-              ),
-              const SizedBox(height: 24),
-              stats,
-              const SizedBox(height: 24),
-              PublishPaperCard(
-                citationsGain: '42',
-                currentCitations: '128',
-                bonusAfter: '×1.85',
-                enabled: true,
-                onPublish: () => showPublishPaperDialog(
-                  context,
+                const SizedBox(height: 12),
+                OutlinedButton(
+                  onPressed: () => showEvolutionBanner(
+                    context,
+                    architecture: 'CNN',
+                    description: 'Convolutional Neural Network',
+                    stage: 3,
+                    totalStages: 8,
+                  ),
+                  child: Text(l10n.previewEvolution),
+                ),
+                const SizedBox(height: 24),
+                stats,
+                const SizedBox(height: 24),
+                PublishPaperCard(
                   citationsGain: '42',
+                  currentCitations: '128',
                   bonusAfter: '×1.85',
+                  enabled: true,
+                  onPublish: () {
+                    _hideHint();
+                    showPublishPaperDialog(
+                      context,
+                      citationsGain: '42',
+                      bonusAfter: '×1.85',
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(height: 16),
-              const PublishPaperCard(
-                citationsGain: '0',
-                currentCitations: '0',
-                bonusAfter: '×1.00',
-                enabled: false,
-              ),
-              const SizedBox(height: 24),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.tune_rounded),
-                label: Text(l10n.settings),
-                onPressed: () => showSettingsSheet(
-                  context,
-                  onResetProgress: () {},
-                  exportSave: () => '{"demo":true}',
-                  importSave: (raw) => raw.trim() == '{"demo":true}',
-                  version: '0.1.0-preview',
+                const SizedBox(height: 16),
+                const PublishPaperCard(
+                  citationsGain: '0',
+                  currentCitations: '0',
+                  bonusAfter: '×1.00',
+                  enabled: false,
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.tune_rounded),
+                  label: Text(l10n.settings),
+                  onPressed: () {
+                    _hideHint();
+                    showSettingsSheet(
+                      context,
+                      onResetProgress: () {},
+                      exportSave: () => '{"demo":true}',
+                      importSave: (raw) => raw.trim() == '{"demo":true}',
+                      version: '0.1.0-preview',
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

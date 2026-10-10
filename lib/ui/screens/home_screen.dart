@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:neural_idle/app/app_info.dart';
 import 'package:neural_idle/l10n/app_localizations.dart';
@@ -72,7 +73,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   VoidCallback? _closeCoach;
   OnboardingStep? _coachStep;
   Rect? _coachTarget;
+  String? _coachText;
   Rect? _lastSeenTarget;
+
+  /// Frame time since which nothing (dialog, sheet, offline report) covers
+  /// the screen: hints wait for a closing one to finish its exit animation.
+  Duration? _uncoveredSince;
   bool _hidingCoach = false;
   bool _coachSyncScheduled = false;
 
@@ -93,10 +99,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Celebrates an evolution at the peak of its animation.
   void _onTransitionPeak(VizTransition transition) {
-    // The offline report already tells about evolutions while away.
+    // Not over dialogs or sheets (an imported save, the publish dialog);
+    // the offline report already tells about evolutions while away.
     if (transition.kind != VizTransitionKind.evolve ||
         !mounted ||
-        _offlineVisible) {
+        _offlineVisible ||
+        !(ModalRoute.of(context)?.isCurrent ?? true)) {
       return;
     }
     final architectures = ref.read(gameEngineProvider).content.architectures;
@@ -123,6 +131,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) _syncCoach();
     });
   }
+
+  /// Units per tap of the first hardware's Buy button (MAX buys at least
+  /// one whenever one is affordable).
+  int _firstHardwareQuantity(GameEngine engine, GameState game) =>
+      _buyAmount == BuyAmount.ten ? 10 : 1;
 
   GlobalKey _coachTargetKey(OnboardingStep step) => switch (step) {
     OnboardingStep.train => _trainKey,
@@ -171,33 +184,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _syncCoach() {
     final engine = ref.read(gameEngineProvider);
     final game = ref.read(gameControllerProvider).state;
-    // Not over dialogs, sheets or the offline report.
-    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
-    final step = _offlineVisible || !onTop
+    // Not over dialogs, sheets or the offline report, nor while one of
+    // them is still animating away.
+    final covered =
+        _offlineVisible || !(ModalRoute.of(context)?.isCurrent ?? true);
+    final now = SchedulerBinding.instance.currentFrameTimeStamp;
+    final since = covered ? null : (_uncoveredSince ??= now);
+    if (covered) _uncoveredSince = null;
+    final settling =
+        since == null || now - since < const Duration(milliseconds: 350);
+    final step = settling
         ? null
-        : onboardingStep(engine, game, ref.read(onboardingProvider));
+        : onboardingStep(
+            engine,
+            game,
+            ref.read(onboardingProvider),
+            buyQuantity: _firstHardwareQuantity(engine, game),
+          );
     final target = step == null ? null : _onScreen(_coachTargetKey(step));
+    final message = step == null ? null : _coachMessage(step, engine, game);
     final seen = _lastSeenTarget;
     _lastSeenTarget = target;
-    if (step == _coachStep && target == _coachTarget) return;
+    if (step == _coachStep && target == _coachTarget && message == _coachText) {
+      return;
+    }
     _hideCoach();
     // Wait for a moving target (a tab sliding in, a resize) to settle.
     if (step == null || target == null || target != seen) {
-      if (step != null) _scheduleCoachSync();
+      if (step != null || (!covered && settling)) _scheduleCoachSync();
       return;
     }
     _coachStep = step;
     _coachTarget = target;
+    _coachText = message;
     _closeCoach = showCoachMark(
       context,
       target: _coachTargetKey(step),
-      message: _coachMessage(step, engine, game),
+      message: message!,
+      // Below the train button on phones would cover the store's tabs.
+      preferAbove: step == OnboardingStep.train,
       onDismiss: () {
         // Tapped away: don't show this hint again.
         if (_hidingCoach) return;
         _closeCoach = null;
         _coachStep = null;
         _coachTarget = null;
+        _coachText = null;
         ref.read(onboardingProvider.notifier).dismiss(step);
       },
     );
@@ -209,6 +241,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _closeCoach = null;
     _coachStep = null;
     _coachTarget = null;
+    _coachText = null;
     if (close == null) return;
     _hidingCoach = true;
     try {
@@ -220,23 +253,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   // ------------------------------------------------------------- actions
 
-  void _openSettings() => unawaited(
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => SettingsSheet(
-        onResetProgress: _controller.resetProgress,
-        exportSave: _controller.exportSave,
-        importSave: _controller.importSave,
-        version: appVersion,
+  void _hideBanner() {
+    _closeBanner?.call();
+    _closeBanner = null;
+  }
+
+  void _openSettings() {
+    _hideBanner();
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => SettingsSheet(
+          onResetProgress: _controller.resetProgress,
+          exportSave: _controller.exportSave,
+          importSave: _controller.importSave,
+          version: appVersion,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Future<void> _publish(GameEngine engine, GameState game) async {
     final text = GameText.of(context);
     final gain = engine.citationsForPublishing(game);
+    _hideBanner();
     final confirmed = await showPublishPaperDialog(
       context,
       citationsGain: text.amount(gain.toDouble()),
@@ -256,6 +298,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final offline = ref.read(gameControllerProvider).offline;
     if (offline == null || _offlineVisible || !mounted) return;
     _offlineVisible = true;
+    _hideBanner();
     final text = GameText.of(context);
     await showDialog<void>(
       context: context,
@@ -295,18 +338,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final production = engine.productionPerSecond(game);
     final accuracy = engine.accuracy(game);
 
-    final hardware = Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: BuyAmountSelector(
-            value: _buyAmount,
-            onChanged: (amount) => setState(() => _buyAmount = amount),
-          ),
-        ),
-        Expanded(child: _hardwareList(engine, game, text)),
-      ],
-    );
+    final hardware = _hardwareList(engine, game, text);
     final research = _researchList(engine, game, text);
     final affordableResearch = engine
         .availableUpgrades(game)
@@ -322,6 +354,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         bonusAfter: text.factor(_multiplierWith(engine, game, gain)),
         enabled: engine.canPublish(game),
         onPublish: () => unawaited(_publish(engine, game)),
+        // After the first paper, the hint is about the next one.
+        lockedHint: game.papersPublished > 0
+            ? l10n.publishLockedNext(
+                text.of(
+                  engine
+                      .content
+                      .architectures[engine.content.publishStage]
+                      .name,
+                ),
+              )
+            : null,
       ),
       const SizedBox(height: 12),
       StatsPanel(
@@ -559,7 +602,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  /// Unlocked hardware, plus a mystery card for the next tier.
+  /// The buy-amount selector, then unlocked hardware plus a mystery card
+  /// for the next tier. The selector scrolls with the list: pinned above
+  /// it, it would leave short phone screens almost no list.
   Widget _hardwareList(GameEngine engine, GameState game, GameText text) {
     final generators = [
       for (final generator in engine.content.generators)
@@ -568,10 +613,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           generator,
     ];
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
-      itemCount: generators.length,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      itemCount: generators.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
+      itemBuilder: (context, item) {
+        if (item == 0) {
+          return Center(
+            child: BuyAmountSelector(
+              value: _buyAmount,
+              onChanged: (amount) => setState(() => _buyAmount = amount),
+            ),
+          );
+        }
+        final index = item - 1;
         final generator = generators[index];
         final locked =
             engine.generatorVisibility(game, generator.id) ==

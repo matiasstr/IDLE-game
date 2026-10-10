@@ -233,7 +233,7 @@ void main() {
     );
     expect(
       es.hintEvolve('12.4K', 'CNN'),
-      'Con 12.4K tokens tu red evoluciona a CNN',
+      'Ganá 12.4K tokens en esta partida y tu red evoluciona a CNN',
     );
     expect(es.hintResearch, contains('Investigación'));
   });

@@ -23,12 +23,14 @@ enum OnboardingStep {
 ///
 /// Hints belong to the first run only. Each one shows while its moment lasts
 /// (it ends by itself once the player does the thing) unless the player
-/// dismissed it.
+/// dismissed it. [buyQuantity] is how many units the shop buys per tap, so
+/// the hardware hint never points at a button that can't be pressed.
 OnboardingStep? onboardingStep(
   GameEngine engine,
   GameState game,
-  Set<OnboardingStep> dismissed,
-) {
+  Set<OnboardingStep> dismissed, {
+  int buyQuantity = 1,
+}) {
   if (game.papersPublished > 0 || game.citations > 0) return null;
   bool open(OnboardingStep step) => !dismissed.contains(step);
 
@@ -37,7 +39,8 @@ OnboardingStep? onboardingStep(
   }
   final first = engine.content.generators.first.id;
   if (game.owned(first) == 0) {
-    final affordable = game.tokens >= engine.generatorCost(game, first);
+    final affordable =
+        game.tokens >= engine.generatorCost(game, first, quantity: buyQuantity);
     return affordable && open(OnboardingStep.buyHardware)
         ? OnboardingStep.buyHardware
         : null;

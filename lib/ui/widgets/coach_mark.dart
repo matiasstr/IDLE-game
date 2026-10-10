@@ -102,6 +102,7 @@ VoidCallback showCoachMark(
   required GlobalKey target,
   required String message,
   required VoidCallback onDismiss,
+  bool preferAbove = false,
 }) {
   final overlay = Overlay.maybeOf(context);
   final targetContext = target.currentContext;
@@ -143,6 +144,7 @@ VoidCallback showCoachMark(
     context: context,
     child: themes.wrap(
       _CoachOverlay(
+        preferAbove: preferAbove,
         target: targetBox,
         overlay: overlayBox,
         message: message,
@@ -165,6 +167,7 @@ VoidCallback showCoachMark(
 
 class _CoachOverlay extends StatefulWidget {
   const _CoachOverlay({
+    required this.preferAbove,
     required this.target,
     required this.overlay,
     required this.message,
@@ -172,6 +175,7 @@ class _CoachOverlay extends StatefulWidget {
     required this.onUnmount,
   });
 
+  final bool preferAbove;
   final RenderBox target;
   final RenderBox overlay;
   final String message;
@@ -245,7 +249,11 @@ class _CoachOverlayState extends State<_CoachOverlay>
       painter.dispose();
       final above = target.top - bounds.top - 8;
       final below = bounds.bottom - target.bottom - 8;
-      final placeAbove = below < height && above > below;
+      // Above when asked to and it fits (or fits better than below);
+      // otherwise below, unless it only fits above.
+      final placeAbove = widget.preferAbove
+          ? above >= height || above > below
+          : below < height && above > below;
       final left = (target.center.dx - width / 2)
           .clamp(bounds.left, bounds.right - width)
           .toDouble();
