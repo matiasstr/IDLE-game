@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:neural_idle/app/app_info.dart';
 import 'package:neural_idle/l10n/app_localizations.dart';
 import 'package:neural_idle/state/game_controller.dart';
 import 'package:neural_idle/state/game_loop.dart';
+import 'package:neural_idle/state/onboarding.dart';
 import 'package:neural_idle/theme/app_colors.dart';
 import 'package:neural_idle/theme/app_spacing.dart';
 import 'package:neural_idle/theme/app_text_styles.dart';
@@ -14,13 +17,18 @@ import 'package:neural_idle/ui/game_text.dart';
 import 'package:neural_idle/ui/layout/narrow_layout.dart';
 import 'package:neural_idle/ui/layout/wide_layout.dart';
 import 'package:neural_idle/ui/widgets/ai_speech_bubble.dart';
+import 'package:neural_idle/ui/widgets/buy_amount_selector.dart';
+import 'package:neural_idle/ui/widgets/coach_mark.dart';
+import 'package:neural_idle/ui/widgets/evolution_banner.dart';
 import 'package:neural_idle/ui/widgets/generator_card.dart';
 import 'package:neural_idle/ui/widgets/language_toggle.dart';
 import 'package:neural_idle/ui/widgets/model_status_panel.dart';
 import 'package:neural_idle/ui/widgets/neon_panel.dart';
 import 'package:neural_idle/ui/widgets/offline_progress_dialog.dart';
+import 'package:neural_idle/ui/widgets/publish_paper_card.dart';
 import 'package:neural_idle/ui/widgets/resource_tile.dart';
 import 'package:neural_idle/ui/widgets/settings_sheet.dart';
+import 'package:neural_idle/ui/widgets/stats_panel.dart';
 import 'package:neural_idle/ui/widgets/store_tabs.dart';
 import 'package:neural_idle/ui/widgets/train_button.dart';
 import 'package:neural_idle/ui/widgets/upgrade_card.dart';
@@ -50,6 +58,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _networkKey = GlobalKey(debugLabel: 'network');
   final _lossChartKey = GlobalKey(debugLabel: 'loss-chart');
 
+  /// What first-run hints point at.
+  final _trainKey = GlobalKey(debugLabel: 'train');
+  final _firstHardwareKey = GlobalKey(debugLabel: 'first-hardware');
+  final _researchTabKey = GlobalKey(debugLabel: 'research-tab');
+
+  BuyAmount _buyAmount = BuyAmount.one;
+
+  VoidCallback? _closeBanner;
+
+  // The first-run hint on screen, where its target was, and where the
+  // target was last seen (a hint moves only once its target stops moving).
+  VoidCallback? _closeCoach;
+  OnboardingStep? _coachStep;
+  Rect? _coachTarget;
+  Rect? _lastSeenTarget;
+  bool _hidingCoach = false;
+  bool _coachSyncScheduled = false;
+
   GameController get _controller => ref.read(gameControllerProvider.notifier);
 
   @override
@@ -57,6 +83,173 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _showOffline());
   }
+
+  @override
+  void dispose() {
+    _closeBanner?.call();
+    _hideCoach();
+    super.dispose();
+  }
+
+  /// Celebrates an evolution at the peak of its animation.
+  void _onTransitionPeak(VizTransition transition) {
+    // The offline report already tells about evolutions while away.
+    if (transition.kind != VizTransitionKind.evolve ||
+        !mounted ||
+        _offlineVisible) {
+      return;
+    }
+    final architectures = ref.read(gameEngineProvider).content.architectures;
+    final stage = transition.toStage.clamp(0, architectures.length - 1);
+    final architecture = architectures[stage];
+    final text = GameText.of(context);
+    _closeBanner?.call();
+    _closeBanner = showEvolutionBanner(
+      context,
+      architecture: text.of(architecture.name),
+      description: text.of(architecture.description),
+      stage: stage + 1,
+      totalStages: architectures.length,
+    );
+  }
+
+  // ------------------------------------------------------------ onboarding
+
+  void _scheduleCoachSync() {
+    if (_coachSyncScheduled) return;
+    _coachSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _coachSyncScheduled = false;
+      if (mounted) _syncCoach();
+    });
+  }
+
+  GlobalKey _coachTargetKey(OnboardingStep step) => switch (step) {
+    OnboardingStep.train => _trainKey,
+    OnboardingStep.buyHardware => _firstHardwareKey,
+    OnboardingStep.evolve => _networkKey,
+    OnboardingStep.research => _researchTabKey,
+  };
+
+  /// Where [key]'s widget is on screen, or null if it isn't laid out there
+  /// (an inactive tab, scrolled away).
+  Rect? _onScreen(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return null;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    final screen = Offset.zero & MediaQuery.sizeOf(context);
+    if (!rect.overlaps(screen)) return null;
+    // Whole pixels, so sub-pixel layout noise doesn't count as moving.
+    return Rect.fromLTRB(
+      rect.left.roundToDouble(),
+      rect.top.roundToDouble(),
+      rect.right.roundToDouble(),
+      rect.bottom.roundToDouble(),
+    );
+  }
+
+  String _coachMessage(OnboardingStep step, GameEngine engine, GameState game) {
+    final l10n = AppLocalizations.of(context);
+    final text = GameText.of(context);
+    return switch (step) {
+      OnboardingStep.train => l10n.hintTrain,
+      OnboardingStep.buyHardware => l10n.hintBuyHardware(
+        text.of(engine.content.generators.first.name),
+      ),
+      OnboardingStep.evolve => switch (engine.nextArchitecture(game)) {
+        final next? => l10n.hintEvolve(
+          text.amount(next.threshold),
+          text.of(next.name),
+        ),
+        null => l10n.hintTrain,
+      },
+      OnboardingStep.research => l10n.hintResearch,
+    };
+  }
+
+  /// Shows, moves or hides the first-run hint to match the game.
+  void _syncCoach() {
+    final engine = ref.read(gameEngineProvider);
+    final game = ref.read(gameControllerProvider).state;
+    // Not over dialogs, sheets or the offline report.
+    final onTop = ModalRoute.of(context)?.isCurrent ?? true;
+    final step = _offlineVisible || !onTop
+        ? null
+        : onboardingStep(engine, game, ref.read(onboardingProvider));
+    final target = step == null ? null : _onScreen(_coachTargetKey(step));
+    final seen = _lastSeenTarget;
+    _lastSeenTarget = target;
+    if (step == _coachStep && target == _coachTarget) return;
+    _hideCoach();
+    // Wait for a moving target (a tab sliding in, a resize) to settle.
+    if (step == null || target == null || target != seen) {
+      if (step != null) _scheduleCoachSync();
+      return;
+    }
+    _coachStep = step;
+    _coachTarget = target;
+    _closeCoach = showCoachMark(
+      context,
+      target: _coachTargetKey(step),
+      message: _coachMessage(step, engine, game),
+      onDismiss: () {
+        // Tapped away: don't show this hint again.
+        if (_hidingCoach) return;
+        _closeCoach = null;
+        _coachStep = null;
+        _coachTarget = null;
+        ref.read(onboardingProvider.notifier).dismiss(step);
+      },
+    );
+  }
+
+  /// Removes the hint without counting it as dismissed.
+  void _hideCoach() {
+    final close = _closeCoach;
+    _closeCoach = null;
+    _coachStep = null;
+    _coachTarget = null;
+    if (close == null) return;
+    _hidingCoach = true;
+    try {
+      close();
+    } finally {
+      _hidingCoach = false;
+    }
+  }
+
+  // ------------------------------------------------------------- actions
+
+  void _openSettings() => unawaited(
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => SettingsSheet(
+        onResetProgress: _controller.resetProgress,
+        exportSave: _controller.exportSave,
+        importSave: _controller.importSave,
+        version: appVersion,
+      ),
+    ),
+  );
+
+  Future<void> _publish(GameEngine engine, GameState game) async {
+    final text = GameText.of(context);
+    final gain = engine.citationsForPublishing(game);
+    final confirmed = await showPublishPaperDialog(
+      context,
+      citationsGain: text.amount(gain.toDouble()),
+      bonusAfter: text.factor(_multiplierWith(engine, game, gain)),
+    );
+    if (confirmed && mounted) _controller.publishPaper();
+  }
+
+  /// The citation multiplier after earning [gain] more citations.
+  static double _multiplierWith(GameEngine engine, GameState game, int gain) =>
+      engine.prestigeMultiplier(
+        game.copyWith(citations: game.citations + gain),
+      );
 
   /// Tells the player what their AI did while they were away (once).
   Future<void> _showOffline() async {
@@ -69,6 +262,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       builder: (_) => OfflineProgressDialog(
         duration: text.duration(offline.credited),
         tokensGained: text.amount(offline.tokensEarned),
+        evolutions: offline.stagesGained,
       ),
     );
     _offlineVisible = false;
@@ -85,8 +279,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     ref.listen(gameControllerProvider.select((s) => s.offline), (_, next) {
-      if (next != null) _showOffline();
+      if (next != null) unawaited(_showOffline());
     });
+    ref.watch(onboardingProvider);
+    _scheduleCoachSync();
     final game = ref.watch(gameControllerProvider).state;
     final engine = ref.watch(gameEngineProvider);
     final lossHistory = ref.watch(lossHistoryProvider);
@@ -99,8 +295,75 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final production = engine.productionPerSecond(game);
     final accuracy = engine.accuracy(game);
 
-    final hardware = _hardwareList(engine, game, text);
+    final hardware = Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: BuyAmountSelector(
+            value: _buyAmount,
+            onChanged: (amount) => setState(() => _buyAmount = amount),
+          ),
+        ),
+        Expanded(child: _hardwareList(engine, game, text)),
+      ],
+    );
     final research = _researchList(engine, game, text);
+    final affordableResearch = engine
+        .availableUpgrades(game)
+        .where((upgrade) => game.tokens >= upgrade.cost)
+        .length;
+
+    // Prestige and lifetime numbers, in the Stats tab.
+    final gain = engine.citationsForPublishing(game);
+    final progressPanels = [
+      PublishPaperCard(
+        citationsGain: text.amount(gain.toDouble()),
+        currentCitations: text.amount(game.citations.toDouble()),
+        bonusAfter: text.factor(_multiplierWith(engine, game, gain)),
+        enabled: engine.canPublish(game),
+        onPublish: () => unawaited(_publish(engine, game)),
+      ),
+      const SizedBox(height: 12),
+      StatsPanel(
+        entries: [
+          StatEntry(
+            l10n.statsLifetimeTokens,
+            text.amount(game.lifetimeTokens),
+            icon: Icons.token_outlined,
+            accent: AppColors.neonCyan,
+          ),
+          StatEntry(
+            l10n.statsPlayTime,
+            text.duration(
+              Duration(milliseconds: (game.playSeconds * 1000).round()),
+            ),
+            icon: Icons.schedule_rounded,
+          ),
+          StatEntry(
+            l10n.statsManualTrainings,
+            text.amount(game.manualTrainings.toDouble()),
+            icon: Icons.bolt_rounded,
+          ),
+          StatEntry(
+            l10n.statsPapers,
+            text.amount(game.papersPublished.toDouble()),
+            icon: Icons.article_outlined,
+          ),
+          StatEntry(
+            l10n.statsCitations,
+            text.amount(game.citations.toDouble()),
+            icon: Icons.format_quote_rounded,
+            accent: AppColors.neonPink,
+          ),
+          StatEntry(
+            l10n.statsCitationBonus,
+            text.factor(engine.prestigeMultiplier(game)),
+            icon: Icons.trending_up_rounded,
+            accent: AppColors.neonPink,
+          ),
+        ],
+      ),
+    ];
 
     Widget resources() => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -169,8 +432,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         progress: engine.stageProgress(game),
         accuracy: accuracy,
         onTrain: _controller.train,
+        onTransitionPeak: _onTransitionPeak,
         theme: _vizTheme,
-        semanticLabel: '${l10n.architecture}: ${text.of(architecture.name)}',
+        semanticLabel: l10n.networkSemanticLabel(text.of(architecture.name)),
       ),
     );
 
@@ -179,10 +443,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       text: text.of(engine.phrase(game, (game.playSeconds / 9).floor())),
     );
 
-    Widget trainButton() => TrainButton(
-      label: l10n.train,
-      gainLabel: text.gain(engine.tapValue(game)),
-      onTap: _controller.train,
+    Widget trainButton() => KeyedSubtree(
+      key: _trainKey,
+      child: TrainButton(
+        label: l10n.train,
+        gainLabel: text.gain(engine.tapValue(game)),
+        onTap: _controller.train,
+      ),
     );
 
     return GameLoop(
@@ -193,6 +460,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               final wide = constraints.maxWidth >= AppSpacing.wideBreakpoint;
               final topBar = _TopBar(
                 wide: wide,
+                onOpenSettings: _openSettings,
                 onDebugAway: () => unawaited(
                   _controller.resumeAfter(const Duration(hours: 2)),
                 ),
@@ -226,7 +494,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           : content;
                     },
                   ),
-                  store: StoreTabs(hardware: hardware, research: research),
+                  store: StoreTabs(
+                    hardware: hardware,
+                    research: research,
+                    researchBadge: affordableResearch,
+                    researchTabKey: _researchTabKey,
+                    stats: ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+                      children: progressPanels,
+                    ),
+                  ),
                 );
               }
               return NarrowLayout(
@@ -265,9 +542,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 store: StoreTabs(
                   hardware: hardware,
                   research: research,
-                  stats: SingleChildScrollView(
+                  researchBadge: affordableResearch,
+                  researchTabKey: _researchTabKey,
+                  stats: ListView(
                     padding: const EdgeInsets.all(16),
-                    child: resources(),
+                    children: [
+                      resources(),
+                      const SizedBox(height: 12),
+                      ...progressPanels,
+                    ],
                   ),
                 ),
               );
@@ -295,8 +578,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final locked =
             engine.generatorVisibility(game, generator.id) ==
             GeneratorVisibility.teased;
-        final cost = engine.generatorCost(game, generator.id);
-        return GeneratorCard(
+        // MAX shows what the tokens buy now (at least one, to show a price).
+        final quantity = switch (_buyAmount) {
+          BuyAmount.one => 1,
+          BuyAmount.ten => 10,
+          BuyAmount.max => math.max(
+            1,
+            engine.maxAffordable(game, generator.id),
+          ),
+        };
+        final cost = engine.generatorCost(
+          game,
+          generator.id,
+          quantity: quantity,
+        );
+        final card = GeneratorCard(
           key: ValueKey('hardware-${generator.id}'),
           icon: generatorIcon(generator.id),
           name: text.of(generator.name),
@@ -306,8 +602,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           production: text.rate(engine.unitProduction(game, generator.id)),
           canAfford: !locked && game.tokens >= cost,
           locked: locked,
-          onBuy: locked ? null : () => _controller.buyGenerator(generator.id),
+          quantityLabel: _buyAmount == BuyAmount.one
+              ? null
+              : '×${text.amount(quantity.toDouble())}',
+          onBuy: locked
+              ? null
+              : switch (_buyAmount) {
+                  BuyAmount.one => () => _controller.buyGenerator(generator.id),
+                  BuyAmount.ten => () => _controller.buyGenerator(
+                    generator.id,
+                    quantity: 10,
+                  ),
+                  BuyAmount.max => () => _controller.buyMax(generator.id),
+                },
         );
+        return index == 0
+            ? KeyedSubtree(key: _firstHardwareKey, child: card)
+            : card;
       },
     );
   }
@@ -343,9 +654,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.wide, required this.onDebugAway});
+  const _TopBar({
+    required this.wide,
+    required this.onOpenSettings,
+    required this.onDebugAway,
+  });
 
   final bool wide;
+  final VoidCallback onOpenSettings;
   final VoidCallback onDebugAway;
 
   @override
@@ -386,12 +702,7 @@ class _TopBar extends StatelessWidget {
           IconButton(
             key: const ValueKey('settings-button'),
             tooltip: l10n.settings,
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
-              builder: (_) => const SettingsSheet(),
-            ),
+            onPressed: onOpenSettings,
             icon: const Icon(
               Icons.tune_rounded,
               color: AppColors.textSecondary,

@@ -35,5 +35,9 @@ class GameText {
 
   String duration(Duration value) => formatDuration(value);
 
+  /// A production multiplier: "×1.40".
+  String factor(double value) =>
+      '×${value.toStringAsFixed(2).replaceAll('.', decimalSeparator)}';
+
   String of(LocalizedText text) => text.resolve(languageCode);
 }

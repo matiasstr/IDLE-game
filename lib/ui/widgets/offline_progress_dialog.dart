@@ -8,9 +8,13 @@ class OfflineProgressDialog extends StatelessWidget {
     super.key,
     required this.duration,
     required this.tokensGained,
+    this.evolutions = 0,
   });
   final String duration;
   final String tokensGained;
+
+  /// Architectures gained while away.
+  final int evolutions;
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -29,6 +33,15 @@ class OfflineProgressDialog extends StatelessWidget {
             l10n.offlineBody(duration, tokensGained),
             textAlign: TextAlign.center,
           ),
+          if (evolutions > 0) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.offlineEvolved(evolutions),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: AppColors.neonViolet),
+            ),
+          ],
         ],
       ),
       actions: [

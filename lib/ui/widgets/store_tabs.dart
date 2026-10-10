@@ -9,11 +9,15 @@ class StoreTabs extends StatelessWidget {
     required this.research,
     this.stats,
     this.researchBadge = 0,
+    this.researchTabKey,
   });
   final Widget hardware;
   final Widget research;
   final Widget? stats;
   final int researchBadge;
+
+  /// Lets hints point at the Research tab.
+  final Key? researchTabKey;
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -25,6 +29,7 @@ class StoreTabs extends StatelessWidget {
             tabs: [
               Tab(text: l10n.hardware, height: 48),
               Tab(
+                key: researchTabKey,
                 height: 48,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

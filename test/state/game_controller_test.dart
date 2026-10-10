@@ -55,6 +55,30 @@ void main() {
     expect(state.manualTrainings, 10);
   });
 
+  test('buying max spends on as many units as the tokens allow', () async {
+    final (container, _) = await createContainer(
+      preferences: {
+        GameController.saveKey: saveOf(const GameState(tokens: 100), now),
+      },
+    );
+    final controller = container.read(gameControllerProvider.notifier);
+    final expected = controller.engine.maxAffordable(
+      container.read(gameControllerProvider).state,
+      'laptop',
+    );
+    expect(expected, greaterThan(1));
+    expect(controller.buyMax('laptop'), isTrue);
+    final state = container.read(gameControllerProvider).state;
+    expect(state.owned('laptop'), expected);
+    expect(
+      controller.engine.generatorCost(state, 'laptop'),
+      greaterThan(state.tokens),
+      reason: 'not even one more is affordable',
+    );
+    expect(controller.buyMax('laptop'), isFalse);
+    expect(controller.buyMax('gaming_gpu'), isFalse, reason: 'locked');
+  });
+
   test('autosaves every 10 seconds of play', () async {
     final (container, prefs) = await createContainer();
     final controller = container.read(gameControllerProvider.notifier)..train();

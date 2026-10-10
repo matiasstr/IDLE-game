@@ -114,23 +114,36 @@ class GeneratorCard extends StatelessWidget {
                     disabledForegroundColor: AppColors.textMuted,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        l10n.buy,
-                        style: Theme.of(context).textTheme.labelSmall,
+                  // Screen readers hear what the button buys, not just
+                  // "Buy" and a number.
+                  child: Semantics(
+                    label: [
+                      '${l10n.buy} $name',
+                      ?quantityLabel,
+                      cost,
+                    ].join(', '),
+                    child: ExcludeSemantics(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            l10n.buy,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                          Text(
+                            quantityLabel == null
+                                ? cost
+                                : '$cost · $quantityLabel',
+                            style: AppTextStyles.number(
+                              size: 12,
+                              color: active
+                                  ? AppColors.neonLime
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        quantityLabel == null ? cost : '$cost · $quantityLabel',
-                        style: AppTextStyles.number(
-                          size: 12,
-                          color: active
-                              ? AppColors.neonLime
-                              : AppColors.textMuted,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],

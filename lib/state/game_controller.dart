@@ -147,6 +147,13 @@ class GameController extends Notifier<GameSession> {
   bool buyGenerator(String generatorId, {int quantity = 1}) =>
       _apply(engine.buyGenerator(state.state, generatorId, quantity: quantity));
 
+  /// Buys as many units of a generator as the tokens allow (false if not
+  /// even one).
+  bool buyMax(String generatorId) {
+    final count = engine.maxAffordable(state.state, generatorId);
+    return count > 0 && buyGenerator(generatorId, quantity: count);
+  }
+
   bool buyUpgrade(String upgradeId) =>
       _apply(engine.buyUpgrade(state.state, upgradeId));
 

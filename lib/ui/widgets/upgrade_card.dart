@@ -97,21 +97,27 @@ class UpgradeCard extends StatelessWidget {
                     disabledForegroundColor: AppColors.textMuted,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(l10n.buy),
-                      const SizedBox(width: 8),
-                      Text(
-                        cost,
-                        style: AppTextStyles.number(
-                          size: 12,
-                          color: active
-                              ? AppColors.neonLime
-                              : AppColors.textMuted,
-                        ),
+                  // Screen readers hear what the button buys.
+                  child: Semantics(
+                    label: '${l10n.buy} $name, $cost',
+                    child: ExcludeSemantics(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(l10n.buy),
+                          const SizedBox(width: 8),
+                          Text(
+                            cost,
+                            style: AppTextStyles.number(
+                              size: 12,
+                              color: active
+                                  ? AppColors.neonLime
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
             ],
