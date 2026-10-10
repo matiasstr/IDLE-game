@@ -29,5 +29,97 @@
   "trainingHint": "Cada token acerca tu modelo a su objetivo.",
   "debugOffline": "Ver progreso sin conexión",
   "close": "Cerrar",
-  "progressLabel": "{progress}% hacia la próxima arquitectura"
+  "progressLabel": "{progress}% hacia la próxima arquitectura",
+  "ratePerSecond": "+{value}/s",
+  "@ratePerSecond": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "buyQuantity": "Comprar ×{count}",
+  "@buyQuantity": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "buyMax": "Comprar máximo",
+  "evolvedTitle": "Nueva arquitectura desbloqueada",
+  "offlineEvolved": "{count, plural, =0{Tu modelo no evolucionó mientras no estabas} one{Tu modelo evolucionó una vez mientras no estabas} other{Tu modelo evolucionó {count} veces mientras no estabas}}",
+  "@offlineEvolved": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "statsLifetimeTokens": "Tokens acumulados",
+  "statsPlayTime": "Tiempo de juego",
+  "statsManualTrainings": "Entrenamientos manuales",
+  "statsPapers": "Papers publicados",
+  "statsCitations": "Citas",
+  "statsCitationBonus": "Bonus por citas",
+  "publishPaper": "Publicar paper",
+  "publishPaperBody": "Publicar un paper reinicia tu progreso de entrenamiento. Conservás las citas, que dan un bonus permanente a todos tus entrenamientos futuros.",
+  "publishConfirm": "Publicar y reiniciar",
+  "cancel": "Cancelar",
+  "citationsGain": "+{count} citas",
+  "@citationsGain": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "publishLocked": "Llegá a Transformer para publicar tu primer paper",
+  "resetProgress": "Reiniciar progreso",
+  "resetProgressConfirm": "¿Borrar todo el progreso de entrenamiento, los papers y las citas? Esta acción no se puede deshacer.",
+  "exportSave": "Exportar partida",
+  "importSave": "Importar partida",
+  "importInvalid": "No se pudo importar esta partida. Revisá el texto e intentá de nuevo.",
+  "copy": "Copiar",
+  "copied": "Copiado",
+  "about": "Acerca de",
+  "sourceCode": "Código fuente",
+  "builtWithFlutter": "Hecho con Flutter",
+  "networkSemanticLabel": "Red neuronal: {architecture}",
+  "@networkSemanticLabel": {
+    "placeholders": {
+      "architecture": {
+        "type": "String"
+      }
+    }
+  },
+  "trainSemanticHint": "Entrenar el modelo una vez",
+  "buyAmount": "Cantidad a comprar",
+  "researchAvailable": "{count, plural, one{1 mejora disponible para comprar} other{{count} mejoras disponibles para comprar}}",
+  "@researchAvailable": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "currentCitations": "Citas actuales",
+  "bonusAfter": "Bonus después de publicar",
+  "saveData": "Datos de la partida",
+  "importSaveHint": "Pegá una partida exportada",
+  "importSaveBody": "Importar reemplaza el progreso de tu partida actual.",
+  "exportFailed": "No se pudo exportar la partida. Intentá de nuevo.",
+  "copyFailed": "No se pudo copiar. Seleccioná el texto para copiarlo manualmente.",
+  "versionLabel": "Versión {version}",
+  "@versionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "widgetPreview": "Vista previa de widgets",
+  "previewTitle": "Vista previa de componentes",
+  "previewDescription": "Datos de ejemplo. Estos controles no cambian tu partida.",
+  "previewEvolution": "Ver evolución"
 }
