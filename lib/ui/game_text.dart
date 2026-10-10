@@ -23,12 +23,14 @@ class GameText {
   String percent(double ratio) =>
       formatPercent(ratio, languageCode: languageCode);
 
+  String get decimalSeparator => languageCode == 'es' ? ',' : '.';
+
   /// "2.30" above 1, otherwise three significant digits ("0.0421").
   String loss(double value) {
     final text = value >= 1
         ? value.toStringAsFixed(2)
         : value.toStringAsPrecision(3);
-    return languageCode == 'es' ? text.replaceAll('.', ',') : text;
+    return text.replaceAll('.', decimalSeparator);
   }
 
   String duration(Duration value) => formatDuration(value);

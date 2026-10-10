@@ -21,7 +21,7 @@
   "language": "Language",
   "systemLanguage": "Use device language",
   "offlineTitle": "Welcome back, trainer",
-  "offlineBody": "While you were away for {duration}, your AI trained and earned {tokens} tokens.",
+  "offlineBody": "While you were away, your AI trained for {duration} and earned {tokens} tokens.",
   "@offlineBody": {"placeholders": {"duration": {"type": "String"}, "tokens": {"type": "String"}}},
   "collect": "Collect tokens",
   "trainingLab": "TRAINING LAB",

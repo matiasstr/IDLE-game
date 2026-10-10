@@ -28,6 +28,7 @@ class LossChart extends StatefulWidget {
     this.showAxis = true,
     this.showReadout = true,
     this.valueLabel = 'loss',
+    this.decimalSeparator = '.',
     this.theme,
     this.semanticLabel,
   }) : assert(minLoss > 0 && maxLoss > minLoss),
@@ -55,6 +56,10 @@ class LossChart extends StatefulWidget {
   /// Short name shown before the value in the readout.
   final String valueLabel;
 
+  /// Decimal separator for every number shown (readout, drop, axis), e.g.
+  /// `','` in Spanish.
+  final String decimalSeparator;
+
   /// Colors and font. Defaults to the [NeuralVizTheme] registered in the
   /// app's `ThemeData`, else the Neural Idle tokens.
   final NeuralVizTheme? theme;
@@ -70,14 +75,32 @@ class LossChart extends StatefulWidget {
 /// Readout format: "2.30" for values >= 1, otherwise 3 significant digits
 /// ("0.0421").
 @visibleForTesting
-String formatLoss(double value) =>
-    value >= 1 ? value.toStringAsFixed(2) : value.toStringAsPrecision(3);
+String formatLoss(double value, [String decimalSeparator = '.']) => _localized(
+  value >= 1 ? value.toStringAsFixed(2) : value.toStringAsPrecision(3),
+  decimalSeparator,
+);
+
+String _localized(String number, String decimalSeparator) =>
+    decimalSeparator == '.' ? number : number.replaceAll('.', decimalSeparator);
 
 /// Drop from [first] to [latest] in percent, as "98.2%". Negative when the
 /// loss went up.
 @visibleForTesting
 double lossDeltaPercent(double first, double latest) =>
     (first - latest) / first * 100;
+
+/// The readout's change since the start of the run, without its arrow
+/// ("98.2%"), or null when it rounds to 0.0% and would say nothing.
+@visibleForTesting
+String? formatLossDelta(
+  double first,
+  double latest, [
+  String decimalSeparator = '.',
+]) {
+  final pct = lossDeltaPercent(first, latest).abs().toStringAsFixed(1);
+  if (pct == '0.0' || pct == 'NaN') return null;
+  return _localized('$pct%', decimalSeparator);
+}
 
 /// TensorBoard's debiased exponential moving average of [history] into [out]
 /// (at least `history.length` long).
@@ -119,6 +142,7 @@ class _LossChartState extends State<LossChart> {
       showAxis: widget.showAxis,
       showReadout: widget.showReadout,
       valueLabel: widget.valueLabel,
+      decimalSeparator: widget.decimalSeparator,
       devicePixelRatio: MediaQuery.maybeDevicePixelRatioOf(context) ?? 1,
       textScaler:
           (MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling).clamp(
@@ -143,7 +167,9 @@ class _LossChartState extends State<LossChart> {
       builder: (context, child) => Semantics(
         container: true,
         label: label,
-        value: _hasValue(history) ? formatLoss(history.latest!) : null,
+        value: _hasValue(history)
+            ? formatLoss(history.latest!, widget.decimalSeparator)
+            : null,
         child: child,
       ),
       child: ExcludeSemantics(child: chart),
@@ -165,6 +191,7 @@ class _ChartStyle {
     required this.showAxis,
     required this.showReadout,
     required this.valueLabel,
+    required this.decimalSeparator,
     required this.devicePixelRatio,
     required this.textScaler,
   });
@@ -176,6 +203,7 @@ class _ChartStyle {
   final bool showAxis;
   final bool showReadout;
   final String valueLabel;
+  final String decimalSeparator;
   final double devicePixelRatio;
   final TextScaler textScaler;
 
@@ -189,6 +217,7 @@ class _ChartStyle {
       other.showAxis == showAxis &&
       other.showReadout == showReadout &&
       other.valueLabel == valueLabel &&
+      other.decimalSeparator == decimalSeparator &&
       other.devicePixelRatio == devicePixelRatio &&
       other.textScaler == textScaler;
 
@@ -201,6 +230,7 @@ class _ChartStyle {
     showAxis,
     showReadout,
     valueLabel,
+    decimalSeparator,
     devicePixelRatio,
     textScaler,
   );
@@ -503,9 +533,11 @@ class _ChartCache {
       if (d <= style.minLoss) break;
       if (d > style.maxLoss) continue;
       _guideY[_guideCount] = d;
+      // Below 1 the axis drops the leading zero (".1", ".01") like
+      // TensorBoard, with the locale's separator.
       final text = k >= 0
           ? '${math.pow(10, k).toInt()}'
-          : '.${'0' * (-k - 1)}1';
+          : '${style.decimalSeparator}${'0' * (-k - 1)}1';
       final label = _axisLabels[_guideCount];
       label.set(text, _axisStyle, scaler);
       axisWidth = math.max(axisWidth, label.width);
@@ -750,16 +782,18 @@ class _ChartCache {
     if (!_hasValue(history)) {
       _value.set('—', _valueStyle, scaler);
     } else {
-      _value.set(formatLoss(latest!), _valueStyle, scaler);
-      if (first != null) {
+      _value.set(
+        formatLoss(latest!, style.decimalSeparator),
+        _valueStyle,
+        scaler,
+      );
+      final delta = first == null
+          ? null
+          : formatLossDelta(first, latest, style.decimalSeparator);
+      if (delta != null) {
         _hasDelta = true;
-        final pct = lossDeltaPercent(first, latest);
-        final down = pct >= 0;
-        _delta.set(
-          '${pct.abs().toStringAsFixed(1)}%',
-          down ? _deltaDownStyle : _deltaUpStyle,
-          scaler,
-        );
+        final down = latest < first!;
+        _delta.set(delta, down ? _deltaDownStyle : _deltaUpStyle, scaler);
         x -= _delta.width;
         _deltaX = x;
         x -= 3 + _kTriangleWidth;

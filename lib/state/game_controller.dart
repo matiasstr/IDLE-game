@@ -66,6 +66,10 @@ class GameController extends Notifier<GameSession> {
   double _sinceSave = 0;
   double _sinceLossSample = 0;
 
+  /// When this instance last wrote (or loaded) the save. A stored save newer
+  /// than this was written by another tab or window.
+  DateTime? _lastWrite;
+
   GameEngine get engine => ref.read(gameEngineProvider);
   SaveCodec get _codec => SaveCodec(engine.content);
   SharedPreferences get _preferences => ref.read(sharedPreferencesProvider);
@@ -75,10 +79,24 @@ class GameController extends Notifier<GameSession> {
   @override
   GameSession build() {
     ref.watch(gameEngineProvider);
-    final raw = _preferences.getString(saveKey);
-    final saved = raw == null ? null : _codec.decode(raw);
+    final saved = _readSave();
+    _lastWrite = saved?.savedAt;
     if (saved == null) return const GameSession(state: GameState.initial);
-    return _afterAbsence(saved.state, _now().difference(saved.savedAt));
+    final session = _afterAbsence(
+      saved.state,
+      _now().difference(saved.savedAt),
+    );
+    if (session.offline != null) {
+      // Evolutions while away belong on the loss chart too.
+      _trackStages(saved.state, session.state);
+      _loss.add(engine.loss(session.state));
+    }
+    return session;
+  }
+
+  SaveData? _readSave() {
+    final raw = _preferences.getString(saveKey);
+    return raw == null ? null : _codec.decode(raw);
   }
 
   GameSession _afterAbsence(
@@ -108,17 +126,19 @@ class GameController extends Notifier<GameSession> {
       _loss.add(engine.loss(state.state));
     }
     _sinceSave += seconds;
-    if (_sinceSave >= autosaveInterval) save();
+    if (_sinceSave >= autosaveInterval) unawaited(_autosave());
   }
 
-  /// Credits time the game wasn't running: a hidden browser tab or an app
-  /// in the background.
-  void resumeAfter(Duration away) {
+  /// Credits time the game wasn't running: a hidden browser tab, an app in
+  /// the background or a sleeping device. If another tab saved meanwhile,
+  /// its newer game is adopted instead, so time is never credited twice.
+  Future<void> resumeAfter(Duration away) async {
+    if (await _adoptNewerSave()) return;
     final before = state.state;
     state = _afterAbsence(state.state, away, state.offline);
     _trackStages(before, state.state);
     _loss.add(engine.loss(state.state));
-    save();
+    _write();
   }
 
   /// One manual training step.
@@ -161,13 +181,50 @@ class GameController extends Notifier<GameSession> {
     if (state.offline != null) state = GameSession(state: state.state);
   }
 
+  /// Writes the save right away (used when the app is being hidden, which
+  /// may be the last chance to write).
   void save() {
     _sinceSave = 0;
+    _write();
+  }
+
+  /// Autosave: first checks whether another tab or window saved a newer
+  /// game; if so that game wins (with the time since its save credited)
+  /// instead of being overwritten.
+  Future<void> _autosave() async {
+    _sinceSave = 0;
+    if (await _adoptNewerSave()) return;
+    _write();
+  }
+
+  /// Adopts the stored game if someone else wrote it after our last write
+  /// (or at all, if there was no save when this game started).
+  Future<bool> _adoptNewerSave() async {
+    try {
+      await _preferences.reload();
+    } on Object {
+      return false;
+    }
+    if (!ref.mounted) return false;
+    final stored = _readSave(), last = _lastWrite;
+    if (stored == null) return false;
+    if (last != null && !stored.savedAt.isAfter(last)) return false;
+    final before = state.state;
+    state = _afterAbsence(
+      stored.state,
+      _now().difference(stored.savedAt),
+      state.offline,
+    );
+    _trackStages(before, state.state);
+    _write();
+    return true;
+  }
+
+  void _write() {
+    final now = _now();
+    _lastWrite = now;
     unawaited(
-      _preferences.setString(
-        saveKey,
-        _codec.encode(state.state, savedAt: _now()),
-      ),
+      _preferences.setString(saveKey, _codec.encode(state.state, savedAt: now)),
     );
     unawaited(_preferences.setString(lossKey, jsonEncode(_loss.toJson())));
   }
@@ -188,10 +245,13 @@ class GameController extends Notifier<GameSession> {
   /// starts a new chart.
   void _trackStages(GameState before, GameState after) {
     final from = engine.stageIndex(before), to = engine.stageIndex(after);
-    if (to > from) {
-      _loss.mark(engine.architecture(after).name.en);
-    } else if (after.papersPublished > before.papersPublished) {
+    if (after.papersPublished > before.papersPublished) {
       _loss.startRun();
+    } else {
+      // Every stage crossed, also several at once after time away.
+      for (var stage = from + 1; stage <= to; stage++) {
+        _loss.mark(engine.content.architectures[stage].name.en);
+      }
     }
   }
 }

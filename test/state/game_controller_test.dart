@@ -15,13 +15,14 @@ final now = DateTime.utc(2026, 10, 9, 12);
 
 Future<(ProviderContainer, SharedPreferences)> createContainer({
   Map<String, Object> preferences = const {},
+  DateTime Function()? clock,
 }) async {
   SharedPreferences.setMockInitialValues(preferences);
   final prefs = await SharedPreferences.getInstance();
   final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
-      clockProvider.overrideWithValue(() => now),
+      clockProvider.overrideWithValue(clock ?? () => now),
     ],
   );
   addTearDown(container.dispose);
@@ -60,6 +61,7 @@ void main() {
     controller.tick(9);
     expect(prefs.getString(GameController.saveKey), isNull);
     controller.tick(1);
+    await pumpEventQueue();
     final saved = const SaveCodec().decode(
       prefs.getString(GameController.saveKey)!,
     )!;
@@ -117,12 +119,132 @@ void main() {
         ),
       },
     );
-    container
+    await container
         .read(gameControllerProvider.notifier)
         .resumeAfter(const Duration(minutes: 5));
     final session = container.read(gameControllerProvider);
     expect(session.offline?.credited, const Duration(minutes: 5));
     expect(session.state.tokens, closeTo(300, 1e-6));
+  });
+
+  test('evolutions while away are all marked on the loss chart', () async {
+    // 60 tokens/s for 5 minutes: past the MLP (300) and the CNN (15000).
+    const game = GameState(
+      runTokens: 290,
+      lifetimeTokens: 290,
+      generators: {'laptop': 120},
+    );
+    final (container, _) = await createContainer(
+      preferences: {
+        GameController.saveKey: saveOf(
+          game,
+          now.subtract(const Duration(minutes: 5)),
+        ),
+      },
+    );
+    container.read(gameControllerProvider);
+    final loss = container.read(lossHistoryProvider);
+    expect(loss.markers.map((m) => m.label), ['MLP', 'CNN']);
+    expect(loss.length, 1);
+
+    // The same when resuming from the background.
+    final (resumed, _) = await createContainer(
+      preferences: {GameController.saveKey: saveOf(game, now)},
+    );
+    await resumed
+        .read(gameControllerProvider.notifier)
+        .resumeAfter(const Duration(minutes: 5));
+    expect(resumed.read(lossHistoryProvider).markers.map((m) => m.label), [
+      'MLP',
+      'CNN',
+    ]);
+  });
+
+  group('another tab or window playing the same save', () {
+    test('its newer save wins over an autosave', () async {
+      var clock = now;
+      final (container, prefs) = await createContainer(
+        preferences: {
+          GameController.saveKey: saveOf(
+            const GameState(generators: {'laptop': 2}),
+            now,
+          ),
+        },
+        clock: () => clock,
+      );
+      final controller = container.read(gameControllerProvider.notifier);
+      // The other tab saved 5 seconds in, with more laptops.
+      await prefs.setString(
+        GameController.saveKey,
+        saveOf(
+          const GameState(tokens: 100, generators: {'laptop': 7}),
+          now.add(const Duration(seconds: 5)),
+        ),
+      );
+      clock = now.add(const Duration(seconds: 10));
+      controller.tick(10);
+      await pumpEventQueue();
+
+      // Its game plus the 5 seconds since it saved, never both games' time.
+      final state = container.read(gameControllerProvider).state;
+      expect(state.owned('laptop'), 7);
+      expect(state.tokens, closeTo(100 + 7 * 0.5 * 5, 1e-6));
+      final saved = const SaveCodec().decode(
+        prefs.getString(GameController.saveKey)!,
+      )!;
+      expect(saved.savedAt, clock);
+      expect(saved.state.owned('laptop'), 7);
+    });
+
+    test('a save it made after this game started from scratch wins', () async {
+      final (container, prefs) = await createContainer();
+      final controller = container.read(gameControllerProvider.notifier)
+        ..train();
+      await prefs.setString(
+        GameController.saveKey,
+        saveOf(const GameState(generators: {'laptop': 3}), now),
+      );
+      controller.tick(10);
+      await pumpEventQueue();
+      expect(container.read(gameControllerProvider).state.owned('laptop'), 3);
+    });
+
+    test('resuming adopts its save instead of crediting the gap', () async {
+      final (container, prefs) = await createContainer(
+        preferences: {
+          GameController.saveKey: saveOf(
+            const GameState(generators: {'laptop': 2}),
+            now.subtract(const Duration(minutes: 30)),
+          ),
+        },
+      );
+      final controller = container.read(gameControllerProvider.notifier)
+        ..dismissOffline();
+      await prefs.setString(
+        GameController.saveKey,
+        saveOf(const GameState(tokens: 42), now),
+      );
+      await controller.resumeAfter(const Duration(minutes: 5));
+      final session = container.read(gameControllerProvider);
+      expect(session.state.tokens, 42);
+      expect(session.offline, isNull);
+    });
+
+    test('our own saves are not mistaken for its saves', () async {
+      var clock = now;
+      final (container, _) = await createContainer(clock: () => clock);
+      final controller = container.read(gameControllerProvider.notifier)
+        ..train();
+      clock = now.add(const Duration(seconds: 10));
+      controller.tick(10);
+      await pumpEventQueue();
+      clock = now.add(const Duration(seconds: 20));
+      controller
+        ..train()
+        ..tick(10);
+      await pumpEventQueue();
+      expect(container.read(gameControllerProvider).state.manualTrainings, 2);
+    });
   });
 
   test('exported saves import back; garbage is rejected', () async {
@@ -251,8 +373,94 @@ void main() {
 
     // A long gap between frames counts as time away.
     await tester.pump(const Duration(minutes: 2));
+    await tester.pump();
     final session = container.read(gameControllerProvider);
     expect(session.offline?.credited, const Duration(minutes: 2));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('with reduced motion the game loop runs without frames', (
+    tester,
+  ) async {
+    var clock = now;
+    SharedPreferences.setMockInitialValues({
+      GameController.saveKey: saveOf(
+        const GameState(generators: {'laptop': 2}),
+        now,
+      ),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        clockProvider.overrideWithValue(() => clock),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MediaQuery(
+          data: MediaQueryData(disableAnimations: true),
+          child: GameLoop(child: SizedBox()),
+        ),
+      ),
+    );
+    final before = container.read(gameControllerProvider).state.tokens;
+    for (var i = 0; i < 10; i++) {
+      clock = clock.add(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    }
+    final after = container.read(gameControllerProvider).state.tokens;
+    expect(after - before, closeTo(1, 1e-6));
+
+    clock = clock.add(const Duration(minutes: 30));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump();
+    expect(
+      container.read(gameControllerProvider).offline?.credited,
+      const Duration(minutes: 30),
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the game loop credits a sleep the frame clock missed', (
+    tester,
+  ) async {
+    var clock = now;
+    SharedPreferences.setMockInitialValues({
+      GameController.saveKey: saveOf(
+        const GameState(generators: {'laptop': 2}),
+        now,
+      ),
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        clockProvider.overrideWithValue(() => clock),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const GameLoop(child: SizedBox()),
+      ),
+    );
+    for (var i = 0; i < 10; i++) {
+      clock = clock.add(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(container.read(gameControllerProvider).offline, isNull);
+
+    // The device slept for half an hour: frame time barely moved.
+    clock = clock.add(const Duration(minutes: 30));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump();
+    final session = container.read(gameControllerProvider);
+    expect(session.offline?.credited, const Duration(minutes: 30));
     await tester.pumpWidget(const SizedBox());
   });
 }

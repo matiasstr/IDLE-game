@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -70,7 +72,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
     _offlineVisible = false;
-    if (mounted) _controller.dismissOffline();
+    if (!mounted) return;
+    // A newer report (another absence) may have arrived while the dialog
+    // was open: show that one instead of dismissing it unseen.
+    if (identical(ref.read(gameControllerProvider).offline, offline)) {
+      _controller.dismissOffline();
+    } else {
+      unawaited(_showOffline());
+    }
   }
 
   @override
@@ -80,6 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
     final game = ref.watch(gameControllerProvider).state;
     final engine = ref.watch(gameEngineProvider);
+    final lossHistory = ref.watch(lossHistoryProvider);
     final l10n = AppLocalizations.of(context);
     final text = GameText.of(context);
 
@@ -122,6 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           stage: stage + 1,
           totalStages: engine.content.architectures.length,
           accuracy: accuracy,
+          accuracyLabel: text.percent(accuracy),
           loss: text.loss(engine.loss(game)),
           nextArchitecture: next == null ? null : text.of(next.name),
           progressToNext: engine.stageProgress(game),
@@ -133,8 +144,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             height: 96,
             child: LossChart(
               key: _lossChartKey,
-              history: ref.watch(lossHistoryProvider),
+              history: lossHistory,
               theme: _vizTheme,
+              decimalSeparator: text.decimalSeparator,
               valueLabel: l10n.loss.toLowerCase(),
               semanticLabel: l10n.loss,
             ),
@@ -181,8 +193,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               final wide = constraints.maxWidth >= AppSpacing.wideBreakpoint;
               final topBar = _TopBar(
                 wide: wide,
-                onDebugAway: () =>
-                    _controller.resumeAfter(const Duration(hours: 2)),
+                onDebugAway: () => unawaited(
+                  _controller.resumeAfter(const Duration(hours: 2)),
+                ),
               );
               if (wide) {
                 return WideLayout(

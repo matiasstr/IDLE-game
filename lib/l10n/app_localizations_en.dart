@@ -73,7 +73,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String offlineBody(String duration, String tokens) {
-    return 'While you were away for $duration, your AI trained and earned $tokens tokens.';
+    return 'While you were away, your AI trained for $duration and earned $tokens tokens.';
   }
 
   @override

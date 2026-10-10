@@ -11,6 +11,7 @@ class ModelStatusPanel extends StatelessWidget {
     required this.stage,
     required this.totalStages,
     required this.accuracy,
+    this.accuracyLabel,
     required this.loss,
     this.nextArchitecture,
     required this.progressToNext,
@@ -20,6 +21,10 @@ class ModelStatusPanel extends StatelessWidget {
   final int stage;
   final int totalStages;
   final double accuracy;
+
+  /// Formatted [accuracy], so it reads the same as elsewhere in the app.
+  /// Defaults to a whole percent.
+  final String? accuracyLabel;
   final String loss;
   final String? nextArchitecture;
   final double progressToNext;
@@ -27,6 +32,8 @@ class ModelStatusPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Rounded down: "100%" only once the evolution has happened.
+    final progress = '${(progressToNext * 100).floor()}';
     return NeonPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,7 +77,7 @@ class ModelStatusPanel extends StatelessWidget {
           const SizedBox(height: 16),
           _Metric(
             label: l10n.accuracy,
-            value: '${(accuracy * 100).toStringAsFixed(0)}%',
+            value: accuracyLabel ?? '${(accuracy * 100).floor()}%',
           ),
           const SizedBox(height: 8),
           _Metric(label: l10n.loss, value: loss),
@@ -88,11 +95,11 @@ class ModelStatusPanel extends StatelessWidget {
               backgroundColor: AppColors.border,
               borderRadius: BorderRadius.circular(4),
               semanticsLabel: l10n.nextArchitecture,
-              semanticsValue: '${(progressToNext * 100).toStringAsFixed(0)}%',
+              semanticsValue: '$progress%',
             ),
             const SizedBox(height: 8),
             Text(
-              l10n.progressLabel((progressToNext * 100).toStringAsFixed(0)),
+              l10n.progressLabel(progress),
               style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: AppColors.textSecondary),
             ),

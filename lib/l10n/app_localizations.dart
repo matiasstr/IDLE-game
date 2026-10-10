@@ -221,7 +221,7 @@ abstract class AppLocalizations {
   /// No description provided for @offlineBody.
   ///
   /// In en, this message translates to:
-  /// **'While you were away for {duration}, your AI trained and earned {tokens} tokens.'**
+  /// **'While you were away, your AI trained for {duration} and earned {tokens} tokens.'**
   String offlineBody(String duration, String tokens);
 
   /// No description provided for @collect.

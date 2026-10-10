@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:neural_viz/neural_viz.dart';
 import 'package:neural_viz/src/loss/loss_chart.dart'
-    show debiasedEma, formatLoss, lossDeltaPercent;
+    show debiasedEma, formatLoss, formatLossDelta, lossDeltaPercent;
 
 /// TensorBoard's smoothing, written the straightforward way.
 List<double> referenceEma(List<double> values, double weight) {
@@ -105,6 +105,21 @@ void main() {
       expect(lossDeltaPercent(2, 2), 0);
       expect(lossDeltaPercent(1, 1.5), -50);
     });
+
+    test('a change that rounds to 0.0% is not shown', () {
+      expect(formatLossDelta(2.3, 0.0414), '98.2%');
+      expect(formatLossDelta(1, 1.5), '50.0%');
+      expect(formatLossDelta(2, 2), isNull);
+      expect(formatLossDelta(1, 0.9996), isNull);
+      expect(formatLossDelta(1, 1.0004), isNull);
+      expect(formatLossDelta(1, 0.999), '0.1%');
+    });
+
+    test('numbers use the given decimal separator', () {
+      expect(formatLoss(math.ln10, ','), '2,30');
+      expect(formatLoss(0.0421, ','), '0,0421');
+      expect(formatLossDelta(2.3, 0.0414, ','), '98,2%');
+    });
   });
 
   group('LossChart', () {
@@ -117,6 +132,19 @@ void main() {
         tester.getSemantics(find.byType(LossChart)),
         isSemantics(label: 'loss'),
       );
+    });
+
+    testWidgets('the semantics value uses the decimal separator', (
+      tester,
+    ) async {
+      final h = LossHistory()
+        ..add(2.3)
+        ..add(0.5);
+      await tester.pumpWidget(
+        host(LossChart(history: h, decimalSeparator: ',')),
+      );
+      expect(tester.takeException(), isNull);
+      expect(tester.getSemantics(find.byType(LossChart)).value, '0,500');
     });
 
     testWidgets('one point still shows the empty state', (tester) async {
