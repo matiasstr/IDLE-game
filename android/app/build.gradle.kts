@@ -1,7 +1,59 @@
+import java.io.File
+import java.util.Base64
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val signingProperties = Properties()
+val signingPropertiesFile = rootProject.file("key.properties")
+val signingEnvironment = listOf(
+    "ANDROID_KEYSTORE_BASE64",
+    "ANDROID_KEYSTORE_PASSWORD",
+    "ANDROID_KEY_ALIAS",
+    "ANDROID_KEY_PASSWORD",
+).associateWith { System.getenv(it) }
+
+val releaseKeystore: File? = when {
+    signingEnvironment.values.any { !it.isNullOrBlank() } -> {
+        val missing = signingEnvironment.filterValues { it.isNullOrBlank() }.keys
+        if (missing.isNotEmpty()) {
+            throw GradleException("Incomplete Android release signing environment. Missing: ${missing.joinToString()}")
+        }
+        val directory = System.getenv("RUNNER_TEMP")?.let { File(it, "neural-idle-signing") }
+            ?: rootProject.file(".gradle/neural-idle-signing")
+        val keystore = File(directory, "release-keystore.jks")
+        val bytes = try {
+            Base64.getDecoder().decode(
+                signingEnvironment.getValue("ANDROID_KEYSTORE_BASE64")!!.replace(Regex("\\s"), ""),
+            )
+        } catch (_: IllegalArgumentException) {
+            throw GradleException("ANDROID_KEYSTORE_BASE64 is not valid base64.")
+        }
+        directory.mkdirs()
+        keystore.writeBytes(bytes)
+        signingProperties.setProperty("storePassword", signingEnvironment.getValue("ANDROID_KEYSTORE_PASSWORD"))
+        signingProperties.setProperty("keyAlias", signingEnvironment.getValue("ANDROID_KEY_ALIAS"))
+        signingProperties.setProperty("keyPassword", signingEnvironment.getValue("ANDROID_KEY_PASSWORD"))
+        keystore
+    }
+    signingPropertiesFile.isFile -> {
+        signingPropertiesFile.inputStream().use { signingProperties.load(it) }
+        val missing = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+            .filter { signingProperties.getProperty(it).isNullOrBlank() }
+        if (missing.isNotEmpty()) {
+            throw GradleException("Incomplete android/key.properties. Missing: ${missing.joinToString()}")
+        }
+        rootProject.file(signingProperties.getProperty("storeFile"))
+    }
+    else -> null
+}
+
+if (releaseKeystore != null && !releaseKeystore.isFile) {
+    throw GradleException("Release keystore not found. Check storeFile in android/key.properties.")
 }
 
 android {
@@ -28,11 +80,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Keep local release-mode runs working without a production key.
+            signingConfig = signingConfigs.getByName(if (releaseKeystore == null) "debug" else "release")
         }
     }
 }
